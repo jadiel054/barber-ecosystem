@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { apiFetch } from '@/lib/api';
 
 interface Appointment {
@@ -22,6 +23,7 @@ interface Service {
 }
 
 export default function DashboardPage() {
+  const router = useRouter();
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [services, setServices] = useState<Service[]>([]);
   const [loading, setLoading] = useState(true);
@@ -39,7 +41,7 @@ export default function DashboardPage() {
     const token = localStorage.getItem('barber_token');
 
     if (!token || !savedUser) {
-      window.location.href = '/login';
+      router.push('/login');
       return;
     }
 
@@ -134,7 +136,8 @@ export default function DashboardPage() {
         <button
           onClick={() => {
             localStorage.clear();
-            window.location.href = '/login';
+            document.cookie = 'barber_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+            router.push('/login');
           }}
           className="text-xs bg-slate-800 hover:bg-slate-700 px-3 py-2 rounded text-slate-300"
         >
