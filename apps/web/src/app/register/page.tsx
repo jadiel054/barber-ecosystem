@@ -1,9 +1,11 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { apiFetch } from '@/lib/api';
 
 export default function RegisterPage() {
+  const router = useRouter();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
@@ -27,7 +29,8 @@ export default function RegisterPage() {
     if (res.success && res.data) {
       localStorage.setItem('barber_token', res.data.token);
       localStorage.setItem('barber_user', JSON.stringify(res.data.user));
-      window.location.href = res.data.user.role === 'CLIENT' ? '/booking' : '/dashboard';
+      document.cookie = `barber_token=${res.data.token}; path=/; max-age=86400; SameSite=Lax`;
+      router.push('/dashboard');
     } else {
       setError(res.error || 'Falha ao realizar cadastro');
     }
