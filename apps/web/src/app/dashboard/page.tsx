@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { apiFetch } from '@/lib/api';
 
 interface Appointment {
@@ -133,16 +134,26 @@ export default function DashboardPage() {
             Bem-vindo, <strong>{user?.name}</strong> ({user?.role})
           </p>
         </div>
-        <button
-          onClick={() => {
-            localStorage.clear();
-            document.cookie = 'barber_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
-            router.push('/login');
-          }}
-          className="text-xs bg-slate-800 hover:bg-slate-700 px-3 py-2 rounded text-slate-300"
-        >
-          Sair
-        </button>
+        <div className="flex items-center gap-3">
+          {user?.role === 'SUPER_ADMIN' && (
+            <Link
+              href="/admin"
+              className="text-xs bg-amber-600 hover:bg-amber-500 text-white font-medium px-3 py-2 rounded"
+            >
+              Painel Admin
+            </Link>
+          )}
+          <button
+            onClick={() => {
+              localStorage.clear();
+              document.cookie = 'barber_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+              router.push('/login');
+            }}
+            className="text-xs bg-slate-800 hover:bg-slate-700 px-3 py-2 rounded text-slate-300"
+          >
+            Sair
+          </button>
+        </div>
       </div>
 
       {msg && (

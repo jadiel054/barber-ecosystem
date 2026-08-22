@@ -6,6 +6,22 @@ const prisma = new PrismaClient();
 async function main() {
   console.log('Seeding initial database data...');
 
+  const superAdminEmail = process.env.SUPERADMIN_EMAIL || 'admin@barberecosystem.com';
+  const superAdminPassword = process.env.SUPERADMIN_PASSWORD || 'trocar-esta-senha-123';
+  const superAdminPasswordHash = await bcrypt.hash(superAdminPassword, 10);
+
+  // Create Super Admin
+  const superAdmin = await prisma.user.upsert({
+    where: { email: superAdminEmail },
+    update: {},
+    create: {
+      name: 'Super Admin',
+      email: superAdminEmail,
+      password: superAdminPasswordHash,
+      role: Role.SUPER_ADMIN,
+    },
+  });
+
   // Create demo barbershop
   const barbershop = await prisma.barbershop.upsert({
     where: { slug: 'barbearia-vintage' },
@@ -69,7 +85,7 @@ async function main() {
     },
   });
 
-  console.log('Seed completed successfully!', { barbershop, admin, barber, client, service });
+  console.log('Seed completed successfully!', { superAdmin, barbershop, admin, barber, client, service });
 }
 
 main()
