@@ -1,0 +1,20 @@
+{
+  "name": "@barber-ecosystem/database",
+  "version": "1.0.0",
+  "private": true,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "generate": "prisma generate",
+    "push": "prisma db push"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.4.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "prisma": "^6.4.0",
+    "typescript": "^5.7.2"
+  }
+}

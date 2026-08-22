@@ -1,0 +1,19 @@
+{
+  "name": "barber-ecosystem",
+  "private": true,
+  "scripts": {
+    "build": "pnpm --recursive run build",
+    "dev": "pnpm --parallel run dev",
+    "test": "pnpm --recursive run test",
+    "lint": "pnpm --recursive run lint",
+    "db:generate": "pnpm --filter @barber-ecosystem/database generate",
+    "db:push": "pnpm --filter @barber-ecosystem/database push"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.2"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "pnpm": ">=8.0.0"
+  }
+}
