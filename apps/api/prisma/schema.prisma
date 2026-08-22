@@ -1,0 +1,89 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum Role {
+  ADMIN
+  BARBER
+  CLIENT
+}
+
+enum AppointmentStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+  COMPLETED
+}
+
+model Barbershop {
+  id          String   @id @default(uuid())
+  name        String
+  slug        String   @unique
+  phone       String?
+  address     String?
+  logoUrl     String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  users        User[]
+  services     Service[]
+  appointments Appointment[]
+}
+
+model User {
+  id           String      @id @default(uuid())
+  email        String      @unique
+  password     String
+  name         String
+  phone        String?
+  role         Role        @default(CLIENT)
+  barbershopId String?
+  barbershop   Barbershop? @relation(fields: [barbershopId], references: [id], onDelete: Cascade)
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  clientAppointments Appointment[] @relation("ClientAppointments")
+  barberAppointments Appointment[] @relation("BarberAppointments")
+}
+
+model Service {
+  id           String     @id @default(uuid())
+  name         String
+  description  String?
+  price        Float
+  durationMin  Int        @default(30)
+  barbershopId String
+  barbershop   Barbershop @relation(fields: [barbershopId], references: [id], onDelete: Cascade)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  appointments Appointment[]
+}
+
+model Appointment {
+  id           String            @id @default(uuid())
+  dateTime     DateTime
+  status       AppointmentStatus @default(PENDING)
+  notes        String?
+
+  barbershopId String
+  barbershop   Barbershop        @relation(fields: [barbershopId], references: [id], onDelete: Cascade)
+
+  serviceId    String
+  service      Service           @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+
+  clientId     String
+  client       User              @relation("ClientAppointments", fields: [clientId], references: [id], onDelete: Cascade)
+
+  barberId     String
+  barber       User              @relation("BarberAppointments", fields: [barberId], references: [id], onDelete: Cascade)
+
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+}
