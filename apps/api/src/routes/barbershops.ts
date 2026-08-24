@@ -16,6 +16,15 @@ barbershopRouter.get('/', async (req, res, next) => {
         phone: true,
         address: true,
         logoUrl: true,
+        active: true,
+        users: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            role: true,
+          },
+        },
       },
     });
     return res.json({ success: true, data: barbershops });

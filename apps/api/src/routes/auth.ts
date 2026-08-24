@@ -41,6 +41,13 @@ authRouter.post('/register', async (req, res, next) => {
       barbershopId: user.barbershopId,
     });
 
+    res.cookie('barber_token', token, {
+      httpOnly: true,
+      secure: true,
+      sameSite: 'none',
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+    });
+
     return res.status(201).json({
       success: true,
       data: {
@@ -51,7 +58,6 @@ authRouter.post('/register', async (req, res, next) => {
           role: user.role,
           barbershopId: user.barbershopId,
         },
-        token,
       },
     });
   } catch (err) {
@@ -85,6 +91,13 @@ authRouter.post('/login', async (req, res, next) => {
       barbershopId: user.barbershopId,
     });
 
+    res.cookie('barber_token', token, {
+      httpOnly: true,
+      secure: true,
+      sameSite: 'none',
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+    });
+
     return res.json({
       success: true,
       data: {
@@ -95,7 +108,6 @@ authRouter.post('/login', async (req, res, next) => {
           role: user.role,
           barbershopId: user.barbershopId,
         },
-        token,
       },
     });
   } catch (err) {
