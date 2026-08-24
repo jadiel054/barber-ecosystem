@@ -19,7 +19,7 @@ export default function RegisterPage() {
     setError('');
     setLoading(true);
 
-    const res = await apiFetch<{ token: string; user: any }>('/auth/register', {
+    const res = await apiFetch<{ user: any }>('/auth/register', {
       method: 'POST',
       body: JSON.stringify({ name, email, phone, password, role }),
     });
@@ -27,10 +27,12 @@ export default function RegisterPage() {
     setLoading(false);
 
     if (res.success && res.data) {
-      localStorage.setItem('barber_token', res.data.token);
       localStorage.setItem('barber_user', JSON.stringify(res.data.user));
-      document.cookie = `barber_token=${res.data.token}; path=/; max-age=86400; SameSite=Lax`;
-      router.push('/dashboard');
+      if (res.data.user?.role === 'SUPER_ADMIN') {
+        router.push('/admin');
+      } else {
+        router.push('/dashboard');
+      }
     } else {
       setError(res.error || 'Falha ao realizar cadastro');
     }

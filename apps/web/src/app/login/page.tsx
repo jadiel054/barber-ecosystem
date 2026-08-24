@@ -16,7 +16,7 @@ export default function LoginPage() {
     setError('');
     setLoading(true);
 
-    const res = await apiFetch<{ token: string; user: any }>('/auth/login', {
+    const res = await apiFetch<{ user: any }>('/auth/login', {
       method: 'POST',
       body: JSON.stringify({ email, password }),
     });
@@ -24,10 +24,12 @@ export default function LoginPage() {
     setLoading(false);
 
     if (res.success && res.data) {
-      localStorage.setItem('barber_token', res.data.token);
       localStorage.setItem('barber_user', JSON.stringify(res.data.user));
-      document.cookie = `barber_token=${res.data.token}; path=/; max-age=86400; SameSite=Lax`;
-      router.push('/dashboard');
+      if (res.data.user?.role === 'SUPER_ADMIN') {
+        router.push('/admin');
+      } else {
+        router.push('/dashboard');
+      }
     } else {
       setError(res.error || 'Falha ao realizar login');
     }

@@ -21,6 +21,7 @@ interface Service {
   name: string;
   price: number;
   durationMin: number;
+  description?: string | null;
 }
 
 export default function DashboardPage() {
@@ -30,50 +31,63 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState<any>(null);
 
-  // New service modal state
+  // Service creation state
   const [newServiceName, setNewServiceName] = useState('');
   const [newServicePrice, setNewServicePrice] = useState('');
   const [newServiceDuration, setNewServiceDuration] = useState('30');
   const [newServiceDesc, setNewServiceDesc] = useState('');
   const [msg, setMsg] = useState('');
 
+  // Service editing state
+  const [editingServiceId, setEditingServiceId] = useState<string | null>(null);
+  const [editServiceName, setEditServiceName] = useState('');
+  const [editServicePrice, setEditServicePrice] = useState('');
+  const [editServiceDuration, setEditServiceDuration] = useState('30');
+  const [editServiceDesc, setEditServiceDesc] = useState('');
+
   useEffect(() => {
     const savedUser = localStorage.getItem('barber_user');
-    const token = localStorage.getItem('barber_token');
 
-    if (!token || !savedUser) {
+    if (!savedUser) {
       router.push('/login');
       return;
     }
 
-    const parsedUser = JSON.parse(savedUser);
-    setUser(parsedUser);
-
-    async function fetchData() {
-      const appRes = await apiFetch<Appointment[]>('/appointments', {}, token);
-      if (appRes.success && appRes.data) {
-        setAppointments(appRes.data);
+    try {
+      const parsedUser = JSON.parse(savedUser);
+      if (parsedUser.role === 'SUPER_ADMIN') {
+        router.push('/admin');
+        return;
       }
+      setUser(parsedUser);
 
-      if (parsedUser.barbershopId) {
-        const srvRes = await apiFetch<Service[]>(`/services?barbershopId=${parsedUser.barbershopId}`, {}, token);
-        if (srvRes.success && srvRes.data) {
-          setServices(srvRes.data);
+      const fetchData = async () => {
+        const appRes = await apiFetch<Appointment[]>('/appointments');
+        if (appRes.success && appRes.data) {
+          setAppointments(appRes.data);
         }
-      }
 
-      setLoading(false);
+        if (parsedUser.barbershopId) {
+          const srvRes = await apiFetch<Service[]>(`/services?barbershopId=${parsedUser.barbershopId}`);
+          if (srvRes.success && srvRes.data) {
+            setServices(srvRes.data);
+          }
+        }
+
+        setLoading(false);
+      };
+
+      fetchData();
+    } catch {
+      router.push('/login');
     }
-
-    fetchData();
-  }, []);
+  }, [router]);
 
   const handleCreateService = async (e: React.FormEvent) => {
     e.preventDefault();
     setMsg('');
 
-    const token = localStorage.getItem('barber_token');
-    if (!token || !user?.barbershopId) return;
+    if (!user?.barbershopId) return;
 
     const res = await apiFetch<Service>(
       '/services',
@@ -86,7 +100,7 @@ export default function DashboardPage() {
           description: newServiceDesc,
         }),
       },
-      token,
+      null,
       user.barbershopId
     );
 
@@ -101,17 +115,74 @@ export default function DashboardPage() {
     }
   };
 
-  const handleUpdateStatus = async (id: string, status: string) => {
-    const token = localStorage.getItem('barber_token');
-    if (!token) return;
+  const handleStartEditService = (srv: Service) => {
+    setEditingServiceId(srv.id);
+    setEditServiceName(srv.name);
+    setEditServicePrice(srv.price.toString());
+    setEditServiceDuration(srv.durationMin.toString());
+    setEditServiceDesc(srv.description || '');
+  };
 
+  const handleSaveEditService = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingServiceId || !user?.barbershopId) return;
+
+    setMsg('');
+    const res = await apiFetch<Service>(
+      `/services/${editingServiceId}`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify({
+          name: editServiceName,
+          price: editServicePrice,
+          durationMin: editServiceDuration,
+          description: editServiceDesc,
+        }),
+      },
+      null,
+      user.barbershopId
+    );
+
+    if (res.success && res.data) {
+      setServices((prev) =>
+        prev.map((s) => (s.id === editingServiceId ? res.data! : s))
+      );
+      setEditingServiceId(null);
+      setMsg('Serviço atualizado com sucesso!');
+    } else {
+      setMsg(res.error || 'Erro ao atualizar serviço');
+    }
+  };
+
+  const handleDeleteService = async (id: string) => {
+    if (!user?.barbershopId) return;
+    if (!confirm('Tem certeza que deseja excluir este serviço?')) return;
+
+    setMsg('');
+    const res = await apiFetch<{ message: string }>(
+      `/services/${id}`,
+      {
+        method: 'DELETE',
+      },
+      null,
+      user.barbershopId
+    );
+
+    if (res.success) {
+      setServices((prev) => prev.filter((s) => s.id !== id));
+      setMsg('Serviço excluído com sucesso!');
+    } else {
+      setMsg(res.error || 'Erro ao excluir serviço');
+    }
+  };
+
+  const handleUpdateStatus = async (id: string, status: string) => {
     const res = await apiFetch<Appointment>(
       `/appointments/${id}/status`,
       {
         method: 'PATCH',
         body: JSON.stringify({ status }),
-      },
-      token
+      }
     );
 
     if (res.success && res.data) {
@@ -143,6 +214,12 @@ export default function DashboardPage() {
               Painel Admin
             </Link>
           )}
+          <Link
+            href="/profile"
+            className="text-xs bg-slate-800 hover:bg-slate-700 px-3 py-2 rounded text-slate-300 font-medium"
+          >
+            Meu Perfil
+          </Link>
           <button
             onClick={() => {
               localStorage.clear();
@@ -293,15 +370,87 @@ export default function DashboardPage() {
                 <p className="text-xs text-slate-400">Nenhum serviço cadastrado.</p>
               ) : (
                 <div className="space-y-2">
-                  {services.map((srv) => (
-                    <div
-                      key={srv.id}
-                      className="flex justify-between items-center text-sm p-2 bg-slate-800 rounded-lg"
-                    >
-                      <span className="text-slate-200">{srv.name}</span>
-                      <span className="font-bold text-amber-400">R$ {srv.price.toFixed(2)}</span>
-                    </div>
-                  ))}
+                  {services.map((srv) =>
+                    editingServiceId === srv.id ? (
+                      <form
+                        key={srv.id}
+                        onSubmit={handleSaveEditService}
+                        className="p-3 bg-slate-800/80 border border-amber-500/50 rounded-lg space-y-2 text-xs"
+                      >
+                        <h4 className="font-bold text-amber-400">Editar Serviço</h4>
+                        <div>
+                          <input
+                            type="text"
+                            value={editServiceName}
+                            onChange={(e) => setEditServiceName(e.target.value)}
+                            required
+                            className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-white"
+                            placeholder="Nome"
+                          />
+                        </div>
+                        <div className="grid grid-cols-2 gap-2">
+                          <input
+                            type="number"
+                            step="0.01"
+                            value={editServicePrice}
+                            onChange={(e) => setEditServicePrice(e.target.value)}
+                            required
+                            className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-white"
+                            placeholder="Preço"
+                          />
+                          <input
+                            type="number"
+                            value={editServiceDuration}
+                            onChange={(e) => setEditServiceDuration(e.target.value)}
+                            required
+                            className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-white"
+                            placeholder="Duração (min)"
+                          />
+                        </div>
+                        <div className="flex justify-end gap-2 pt-1">
+                          <button
+                            type="button"
+                            onClick={() => setEditingServiceId(null)}
+                            className="bg-slate-700 hover:bg-slate-600 px-2 py-1 rounded text-slate-300"
+                          >
+                            Cancelar
+                          </button>
+                          <button
+                            type="submit"
+                            className="bg-amber-600 hover:bg-amber-500 px-2 py-1 rounded text-white font-medium"
+                          >
+                            Salvar
+                          </button>
+                        </div>
+                      </form>
+                    ) : (
+                      <div
+                        key={srv.id}
+                        className="flex justify-between items-center text-sm p-3 bg-slate-800 rounded-lg"
+                      >
+                        <div>
+                          <p className="text-slate-200 font-medium">{srv.name}</p>
+                          <p className="text-xs text-slate-400">
+                            R$ {srv.price.toFixed(2)} • {srv.durationMin} min
+                          </p>
+                        </div>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => handleStartEditService(srv)}
+                            className="text-xs bg-slate-700 hover:bg-slate-600 text-amber-400 px-2 py-1 rounded"
+                          >
+                            Editar
+                          </button>
+                          <button
+                            onClick={() => handleDeleteService(srv.id)}
+                            className="text-xs bg-red-900/40 hover:bg-red-800/60 text-red-300 px-2 py-1 rounded"
+                          >
+                            Excluir
+                          </button>
+                        </div>
+                      </div>
+                    )
+                  )}
                 </div>
               )}
             </div>
