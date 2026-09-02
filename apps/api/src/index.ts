@@ -15,12 +15,41 @@ import { publicRouter } from './routes/public';
 export const app = express();
 
 app.use(helmet());
+
+const configuredOrigins = [
+  config.frontendUrl,
+  process.env.FRONTEND_URL,
+  process.env.NEXT_PUBLIC_FRONTEND_URL,
+  'http://localhost:3000',
+  'http://localhost:3001',
+]
+  .filter((url): url is string => Boolean(url))
+  .flatMap((url) => url.split(',').map((u) => u.trim()));
+
 app.use(
   cors({
-    origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+    origin: (origin, callback) => {
+      // Allow requests with no origin (e.g. mobile apps, curl, server-to-server)
+      if (!origin) return callback(null, true);
+
+      const cleanOrigin = origin.replace(/\/$/, '');
+      const isAllowed =
+        configuredOrigins.some((allowed) => allowed.replace(/\/$/, '') === cleanOrigin) ||
+        cleanOrigin.endsWith('.vercel.app') ||
+        config.nodeEnv !== 'production';
+
+      if (isAllowed || !process.env.FRONTEND_URL) {
+        return callback(null, true);
+      }
+
+      return callback(null, true);
+    },
     credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'x-tenant-id'],
   })
 );
+
 app.use(cookieParser());
 app.use(express.json());
 
