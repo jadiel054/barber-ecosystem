@@ -22,20 +22,42 @@ enum AppointmentStatus {
   COMPLETED
 }
 
-model Barbershop {
-  id          String   @id @default(uuid())
-  name        String
-  slug        String   @unique
-  phone       String?
-  address     String?
-  logoUrl     String?
-  active      Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+enum SubscriptionStatus {
+  ACTIVE
+  CANCELED
+  PAST_DUE
+  TRIALING
+}
 
-  users        User[]
-  services     Service[]
-  appointments Appointment[]
+model Barbershop {
+  id           String    @id @default(uuid())
+  name         String
+  slug         String    @unique
+  phone        String?
+  address      String?
+  neighborhood String?
+  city         String?
+  state        String?
+  logoUrl      String?
+  coverUrl     String?
+  description  String?
+  openingHours Json?
+  active       Boolean   @default(true)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  ownerId      String?   @unique
+  owner        User?     @relation("BarbershopOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+
+  users         User[]
+  services      Service[]
+  appointments  Appointment[]
+  professionals Professional[]
+  holidays      BarbershopHoliday[]
+  subscription  Subscription?
+  reviews       Review[]
+  favorites     Favorite[]
+  publications  Publication[]
 }
 
 model User {
@@ -44,14 +66,41 @@ model User {
   password     String
   name         String
   phone        String?
+  avatarUrl    String?
   role         Role        @default(CLIENT)
   barbershopId String?
   barbershop   Barbershop? @relation(fields: [barbershopId], references: [id], onDelete: Cascade)
   createdAt    DateTime    @default(now())
   updatedAt    DateTime    @updatedAt
 
-  clientAppointments Appointment[] @relation("ClientAppointments")
-  barberAppointments Appointment[] @relation("BarberAppointments")
+  ownedBarbershop     Barbershop?   @relation("BarbershopOwner")
+  professionalProfile Professional?
+  clientAppointments  Appointment[] @relation("ClientAppointments")
+  barberAppointments  Appointment[] @relation("BarberAppointments")
+  reviews             Review[]      @relation("ClientReviews")
+  favorites           Favorite[]    @relation("ClientFavorites")
+  publications        Publication[] @relation("AuthorPublications")
+}
+
+model Professional {
+  id           String      @id @default(uuid())
+  name         String
+  email        String?
+  phone        String?
+  avatarUrl    String?
+  commission   Float       @default(0.0)
+  workingHours Json?
+  active       Boolean     @default(true)
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  barbershopId String
+  barbershop   Barbershop  @relation(fields: [barbershopId], references: [id], onDelete: Cascade)
+
+  userId       String?     @unique
+  user         User?       @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  appointments Appointment[]
 }
 
 model Service {
@@ -73,6 +122,7 @@ model Appointment {
   dateTime     DateTime
   status       AppointmentStatus @default(PENDING)
   notes        String?
+  totalPrice   Float?
 
   barbershopId String
   barbershop   Barbershop        @relation(fields: [barbershopId], references: [id], onDelete: Cascade)
@@ -86,6 +136,113 @@ model Appointment {
   barberId     String
   barber       User              @relation("BarberAppointments", fields: [barberId], references: [id], onDelete: Cascade)
 
+  professionalId String?
+  professional   Professional?   @relation(fields: [professionalId], references: [id], onDelete: SetNull)
+
+  review       Review?
+
   createdAt    DateTime          @default(now())
   updatedAt    DateTime          @updatedAt
+}
+
+model Holiday {
+  id         String   @id @default(uuid())
+  name       String
+  date       DateTime
+  isNational Boolean  @default(true)
+  state      String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  barbershopHolidays BarbershopHoliday[]
+}
+
+model BarbershopHoliday {
+  id           String    @id @default(uuid())
+  date         DateTime
+  description  String?
+  isClosed     Boolean   @default(true)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  barbershopId String
+  barbershop   Barbershop @relation(fields: [barbershopId], references: [id], onDelete: Cascade)
+
+  holidayId    String?
+  holiday      Holiday?   @relation(fields: [holidayId], references: [id], onDelete: SetNull)
+}
+
+model Plan {
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+  price       Float
+  interval    String   @default("MONTHLY")
+  features    Json?
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  subscriptions Subscription[]
+}
+
+model Subscription {
+  id           String             @id @default(uuid())
+  status       SubscriptionStatus @default(ACTIVE)
+  startDate    DateTime           @default(now())
+  endDate      DateTime?
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+
+  barbershopId String             @unique
+  barbershop   Barbershop         @relation(fields: [barbershopId], references: [id], onDelete: Cascade)
+
+  planId       String
+  plan         Plan               @relation(fields: [planId], references: [id], onDelete: Restrict)
+}
+
+model Review {
+  id           String   @id @default(uuid())
+  rating       Int
+  comment      String?
+  photos       Json?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  clientId     String
+  client       User     @relation("ClientReviews", fields: [clientId], references: [id], onDelete: Cascade)
+
+  barbershopId String
+  barbershop   Barbershop @relation(fields: [barbershopId], references: [id], onDelete: Cascade)
+
+  appointmentId String? @unique
+  appointment   Appointment? @relation(fields: [appointmentId], references: [id], onDelete: SetNull)
+}
+
+model Favorite {
+  id           String   @id @default(uuid())
+  createdAt    DateTime @default(now())
+
+  clientId     String
+  client       User     @relation("ClientFavorites", fields: [clientId], references: [id], onDelete: Cascade)
+
+  barbershopId String
+  barbershop   Barbershop @relation(fields: [barbershopId], references: [id], onDelete: Cascade)
+
+  @@unique([clientId, barbershopId])
+}
+
+model Publication {
+  id           String   @id @default(uuid())
+  title        String?
+  content      String?
+  imageUrl     String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  barbershopId String
+  barbershop   Barbershop @relation(fields: [barbershopId], references: [id], onDelete: Cascade)
+
+  authorId     String?
+  author       User?      @relation("AuthorPublications", fields: [authorId], references: [id], onDelete: SetNull)
 }
