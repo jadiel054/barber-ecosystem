@@ -20,6 +20,13 @@ export default function ProfilePage() {
   const [passwordErr, setPasswordErr] = useState('');
   const [passwordLoading, setPasswordLoading] = useState(false);
 
+  // LGPD States
+  const [exportLoading, setExportLoading] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deletePassword, setDeletePassword] = useState('');
+  const [deleteErr, setDeleteErr] = useState('');
+  const [deleteLoading, setDeleteLoading] = useState(false);
+
   useEffect(() => {
     const savedUser = localStorage.getItem('barber_user');
     if (!savedUser) {
@@ -33,7 +40,6 @@ export default function ProfilePage() {
       setName(parsedUser.name || '');
       setPhone(parsedUser.phone || '');
 
-      // Also fetch latest profile data from /auth/me or /users/me
       apiFetch<any>('/auth/me').then((res) => {
         if (res.success && res.data) {
           setUser(res.data);
@@ -92,13 +98,53 @@ export default function ProfilePage() {
     }
   };
 
+  const handleExportData = async () => {
+    setExportLoading(true);
+    const res = await apiFetch<any>('/users/me/export');
+    setExportLoading(false);
+
+    if (res.success && res.data) {
+      const dataStr = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(res.data, null, 2));
+      const downloadAnchor = document.createElement('a');
+      downloadAnchor.setAttribute('href', dataStr);
+      downloadAnchor.setAttribute('download', `meus-dados-barber-ecosystem-${user?.id || 'export'}.json`);
+      document.body.appendChild(downloadAnchor);
+      downloadAnchor.click();
+      downloadAnchor.remove();
+    } else {
+      alert(res.error || 'Erro ao baixar dados');
+    }
+  };
+
+  const handleDeleteAccount = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setDeleteErr('');
+    setDeleteLoading(true);
+
+    const res = await apiFetch<any>('/users/me', {
+      method: 'DELETE',
+      body: JSON.stringify({ password: deletePassword }),
+    });
+
+    setDeleteLoading(false);
+
+    if (res.success) {
+      localStorage.clear();
+      document.cookie = 'barber_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+      alert('Sua conta e dados pessoais foram excluídos com sucesso.');
+      router.push('/login');
+    } else {
+      setDeleteErr(res.error || 'Erro ao excluir conta. Verifique sua senha.');
+    }
+  };
+
   return (
     <div className="max-w-2xl mx-auto space-y-8 my-6">
       <div className="flex justify-between items-center border-b border-slate-800 pb-4">
         <div>
           <h1 className="text-2xl font-bold text-amber-500">Meu Perfil</h1>
           <p className="text-slate-400 text-sm">
-            Gerencie suas informações pessoais e credenciais de acesso
+            Gerencie suas informações pessoais, credenciais de acesso e privacidade (LGPD)
           </p>
         </div>
         <Link
@@ -160,7 +206,7 @@ export default function ProfilePage() {
           <button
             type="submit"
             disabled={profileLoading}
-            className="bg-amber-600 hover:bg-amber-500 text-white font-semibold px-4 py-2 rounded-lg text-sm transition duration-200 disabled:opacity-50"
+            className="bg-amber-600 hover:bg-[#e67700] hover:scale-[1.02] active:scale-[0.98] text-white font-semibold px-4 py-2 rounded-lg text-sm transition-all duration-200 disabled:opacity-50"
           >
             {profileLoading ? 'Salvando...' : 'Salvar Alterações'}
           </button>
@@ -210,12 +256,94 @@ export default function ProfilePage() {
           <button
             type="submit"
             disabled={passwordLoading}
-            className="bg-amber-600 hover:bg-amber-500 text-white font-semibold px-4 py-2 rounded-lg text-sm transition duration-200 disabled:opacity-50"
+            className="bg-amber-600 hover:bg-[#e67700] hover:scale-[1.02] active:scale-[0.98] text-white font-semibold px-4 py-2 rounded-lg text-sm transition-all duration-200 disabled:opacity-50"
           >
             {passwordLoading ? 'Alterando...' : 'Atualizar Senha'}
           </button>
         </form>
       </div>
+
+      {/* Seção LGPD: Privacidade e Controle de Dados */}
+      <div className="p-6 bg-slate-900 border border-slate-800 rounded-xl space-y-4 shadow-xl">
+        <h2 className="text-lg font-bold text-white flex items-center gap-2">
+          🛡️ Privacidade e Seus Dados (LGPD)
+        </h2>
+        <p className="text-xs text-slate-400">
+          Você tem total controle sobre suas informações. Baixe uma cópia dos seus dados cadastrados ou solicite a exclusão da sua conta.
+        </p>
+
+        <div className="flex flex-wrap gap-4 pt-2">
+          <button
+            onClick={handleExportData}
+            disabled={exportLoading}
+            className="bg-slate-800 hover:bg-slate-700 text-amber-400 border border-slate-700 font-medium px-4 py-2 rounded-lg text-sm transition duration-200 flex items-center gap-2 disabled:opacity-50"
+          >
+            📥 {exportLoading ? 'Gerando arquivo...' : 'Baixar Meus Dados'}
+          </button>
+
+          <button
+            onClick={() => setShowDeleteModal(true)}
+            className="bg-red-950/60 hover:bg-red-900/80 text-red-300 border border-red-800/60 font-medium px-4 py-2 rounded-lg text-sm transition duration-200 flex items-center gap-2"
+          >
+            🗑️ Excluir Minha Conta
+          </button>
+        </div>
+      </div>
+
+      {/* Modal de Confirmação para Excluir Conta */}
+      {showDeleteModal && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 max-w-md w-full space-y-4 shadow-2xl">
+            <h3 className="text-xl font-bold text-red-400">⚠️ Confirmar Exclusão de Conta</h3>
+            <p className="text-sm text-slate-300 leading-relaxed">
+              Esta ação é <strong>irreversível</strong>. Todos os seus dados pessoais, agendamentos e preferências serão permanentemente excluídos do sistema.
+            </p>
+
+            {deleteErr && (
+              <div className="p-3 bg-red-500/10 border border-red-500 text-red-400 rounded-lg text-xs">
+                {deleteErr}
+              </div>
+            )}
+
+            <form onSubmit={handleDeleteAccount} className="space-y-4">
+              <div>
+                <label className="block text-xs font-medium text-slate-300 mb-1">
+                  Digite sua senha para confirmar:
+                </label>
+                <input
+                  type="password"
+                  value={deletePassword}
+                  onChange={(e) => setDeletePassword(e.target.value)}
+                  required
+                  placeholder="••••••••"
+                  className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-red-500 text-sm"
+                />
+              </div>
+
+              <div className="flex justify-end gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowDeleteModal(false);
+                    setDeletePassword('');
+                    setDeleteErr('');
+                  }}
+                  className="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={deleteLoading || !deletePassword}
+                  className="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-500 text-white text-xs font-semibold transition disabled:opacity-50"
+                >
+                  {deleteLoading ? 'Excluindo...' : 'Confirmar Exclusão'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

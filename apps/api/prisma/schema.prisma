@@ -49,15 +49,16 @@ model Barbershop {
   ownerId      String?   @unique
   owner        User?     @relation("BarbershopOwner", fields: [ownerId], references: [id], onDelete: SetNull)
 
-  users         User[]
-  services      Service[]
-  appointments  Appointment[]
-  professionals Professional[]
-  holidays      BarbershopHoliday[]
-  subscription  Subscription?
-  reviews       Review[]
-  favorites     Favorite[]
-  publications  Publication[]
+  users           User[]
+  services        Service[]
+  appointments    Appointment[]
+  professionals   Professional[]
+  holidays        BarbershopHoliday[]
+  subscription    Subscription?
+  reviews         Review[]
+  favorites       Favorite[]
+  publications    Publication[]
+  contactMessages ContactMessage[]
 }
 
 model User {
@@ -245,4 +246,78 @@ model Publication {
 
   authorId     String?
   author       User?      @relation("AuthorPublications", fields: [authorId], references: [id], onDelete: SetNull)
+}
+
+model ContactMessage {
+  id           String      @id @default(uuid())
+  senderName   String
+  senderEmail  String
+  subject      String
+  message      String
+  status       String      @default("PENDING")
+  reply        String?
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  barbershopId String?
+  barbershop   Barbershop? @relation(fields: [barbershopId], references: [id], onDelete: SetNull)
+}
+
+model BroadcastCommunication {
+  id             String    @id @default(uuid())
+  title          String
+  content        String
+  targetAudience String    @default("ALL")
+  scheduledAt    DateTime?
+  sentAt         DateTime?
+  status         String    @default("SENT")
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+}
+
+model PlatformAnnouncement {
+  id             String    @id @default(uuid())
+  title          String
+  content        String
+  type           String    @default("BANNER")
+  couponCode     String?
+  discountPercent Float?
+  targetAudience String    @default("ALL")
+  startDate      DateTime?
+  endDate        DateTime?
+  active         Boolean   @default(true)
+  viewsCount     Int       @default(0)
+  usageCount     Int       @default(0)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+}
+
+model FeatureToggle {
+  key       String   @id
+  name      String
+  enabled   Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model FeatureToggleHistory {
+  id         String   @id @default(uuid())
+  featureKey String
+  action     String
+  adminId    String?
+  adminEmail String?
+  reason     String?
+  createdAt  DateTime @default(now())
+}
+
+model PlatformSettings {
+  id              String   @id @default("default")
+  platformName    String   @default("Central de Barbearias")
+  supportEmail    String   @default("suporte@barberecosystem.com.br")
+  phone           String?
+  maintenanceMode Boolean  @default(false)
+  footerTexts     Json?
+  pricingSettings Json?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 }

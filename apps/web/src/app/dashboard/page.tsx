@@ -31,6 +31,10 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState<any>(null);
 
+  // Platform announcements and feature status
+  const [announcements, setAnnouncements] = useState<any[]>([]);
+  const [featureStatus, setFeatureStatus] = useState<Record<string, boolean>>({});
+
   // Service creation state
   const [newServiceName, setNewServiceName] = useState('');
   const [newServicePrice, setNewServicePrice] = useState('');
@@ -72,6 +76,19 @@ export default function DashboardPage() {
           if (srvRes.success && srvRes.data) {
             setServices(srvRes.data);
           }
+        }
+
+        // Fetch announcements
+        const audienceParam = parsedUser.role === 'ADMIN' ? 'OWNERS' : 'CLIENTS';
+        const annRes = await apiFetch<any[]>(`/announcements/active?audience=${audienceParam}`);
+        if (annRes.success && annRes.data) {
+          setAnnouncements(annRes.data);
+        }
+
+        // Fetch feature status
+        const featRes = await apiFetch<Record<string, boolean>>('/features/status');
+        if (featRes.success && featRes.data) {
+          setFeatureStatus(featRes.data);
         }
 
         setLoading(false);
@@ -206,10 +223,10 @@ export default function DashboardPage() {
           </p>
         </div>
         <div className="flex items-center gap-3">
-          {user?.role === 'SUPER_ADMIN' && (
+          {(user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN') && (
             <Link
               href="/admin"
-              className="text-xs bg-amber-600 hover:bg-amber-500 text-white font-medium px-3 py-2 rounded"
+              className="text-xs bg-amber-600 hover:bg-[#e67700] hover:scale-[1.02] active:scale-[0.98] text-white font-medium px-3 py-2 rounded transition-all duration-200"
             >
               Painel Admin
             </Link>
@@ -232,6 +249,41 @@ export default function DashboardPage() {
           </button>
         </div>
       </div>
+
+      {/* Exibição de Anúncios e Promoções da Plataforma */}
+      {announcements.length > 0 && (
+        <div className="space-y-3">
+          {announcements.map((ann) => (
+            <div
+              key={ann.id}
+              className="p-4 bg-gradient-to-r from-amber-500/10 via-amber-500/5 to-transparent border border-amber-500/30 rounded-xl space-y-1 shadow-lg"
+            >
+              <div className="flex justify-between items-center">
+                <span className="text-xs font-bold text-amber-400 uppercase tracking-wider">
+                  📢 {ann.type === 'COUPON' ? 'Cupom de Desconto' : 'Comunicado da Plataforma'}
+                </span>
+                {ann.couponCode && (
+                  <span className="bg-amber-500 text-slate-950 px-2 py-0.5 rounded text-xs font-mono font-bold">
+                    CÓDIGO: {ann.couponCode}
+                  </span>
+                )}
+              </div>
+              <h3 className="text-base font-bold text-white">{ann.title}</h3>
+              <p className="text-xs text-slate-300 leading-relaxed">{ann.content}</p>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Alerta de Funcionalidades Desativadas */}
+      {featureStatus.AI_AGENT === false && (
+        <div className="p-4 bg-slate-900 border border-amber-500/30 rounded-xl text-xs text-slate-300 space-y-1">
+          <strong className="text-amber-400 font-bold block">ℹ️ Agente de IA de Atendimento Desativado</strong>
+          <p>
+            Esta funcionalidade foi temporariamente desativada pela administração do sistema. Seus dados estão preservados.
+          </p>
+        </div>
+      )}
 
       {msg && (
         <div className="p-3 bg-amber-500/10 border border-amber-500 text-amber-400 rounded-lg text-sm">
@@ -357,7 +409,7 @@ export default function DashboardPage() {
                 </div>
                 <button
                   type="submit"
-                  className="w-full bg-amber-600 hover:bg-amber-500 text-white font-medium py-2 rounded-lg text-sm"
+                  className="w-full bg-amber-600 hover:bg-[#e67700] hover:scale-[1.02] active:scale-[0.98] text-white font-medium py-2 rounded-lg text-sm transition-all duration-200"
                 >
                   Adicionar Serviço
                 </button>
