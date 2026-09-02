@@ -1,4 +1,13 @@
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
+const RAW_API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
+
+function getFullUrl(endpoint: string): string {
+  let base = RAW_API_URL.trim().replace(/\/+$/, '');
+  if (!base.endsWith('/api') && !base.includes('/api/')) {
+    base = `${base}/api`;
+  }
+  const path = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+  return `${base}${path}`;
+}
 
 export async function apiFetch<T>(
   endpoint: string,
@@ -19,15 +28,27 @@ export async function apiFetch<T>(
     headers['x-tenant-id'] = tenantId;
   }
 
+  const url = getFullUrl(endpoint);
+
   try {
-    const res = await fetch(`${API_BASE_URL}${endpoint}`, {
+    const res = await fetch(url, {
       ...options,
       credentials: 'include',
       headers,
     });
 
-    const data = await res.json();
-    return data;
+    const contentType = res.headers.get('content-type');
+    if (contentType && contentType.includes('application/json')) {
+      const data = await res.json();
+      return data;
+    }
+
+    return {
+      success: false,
+      error: res.status >= 400
+        ? `Erro do servidor (${res.status}): ${res.statusText || 'Resposta em formato HTML ou inválida'}`
+        : 'A resposta da API não está em formato JSON.',
+    };
   } catch (err: any) {
     return {
       success: false,

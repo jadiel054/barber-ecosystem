@@ -3,7 +3,7 @@ services:
     name: barber-ecosystem-api
     env: node
     buildCommand: pnpm install && pnpm --filter api exec prisma generate && pnpm --filter api exec prisma migrate deploy && pnpm --filter api run build
-    startCommand: pnpm --filter api start
+    startCommand: pnpm --filter api exec prisma generate && pnpm --filter api start
     envVars:
       - key: NODE_ENV
         value: production
@@ -15,3 +15,5 @@ services:
         sync: false
       - key: JWT_SECRET
         generateValue: true
+      - key: FRONTEND_URL
+        sync: false
