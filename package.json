@@ -14,5 +14,12 @@
   },
   "engines": {
     "node": ">=18.0.0"
+  },
+  "pnpm": {
+    "allowedBuilds": [
+      "@prisma/client",
+      "@prisma/engines",
+      "prisma"
+    ]
   }
 }
