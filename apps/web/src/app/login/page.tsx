@@ -9,29 +9,57 @@ export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [successMsg, setSuccessMsg] = useState('');
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    setSuccessMsg('');
     setLoading(true);
 
-    const res = await apiFetch<{ user: any }>('/auth/login', {
-      method: 'POST',
-      body: JSON.stringify({ email, password }),
-    });
+    console.log(`[Client Log] Iniciando login para email: "${email}"`);
 
-    setLoading(false);
+    try {
+      const res = await apiFetch<{ token?: string; user: any }>('/auth/login', {
+        method: 'POST',
+        body: JSON.stringify({ email, password }),
+      });
 
-    if (res.success && res.data) {
-      localStorage.setItem('barber_user', JSON.stringify(res.data.user));
-      if (res.data.user?.role === 'SUPER_ADMIN') {
-        router.push('/admin');
+      console.log('[Client Log] Resposta recebida da API:', res);
+
+      if (res.success && res.data) {
+        setSuccessMsg('✅ Sucesso! Entrando...');
+        console.log('[Client Log] Login autorizado! Salvando dados do usuário e token...');
+
+        if (res.data.token) {
+          localStorage.setItem('barber_token', res.data.token);
+          // Set cookie for fallback SSR / HTTP requests
+          document.cookie = `barber_token=${res.data.token}; path=/; max-age=${7 * 24 * 60 * 60}; SameSite=None; Secure`;
+        }
+
+        if (res.data.user) {
+          localStorage.setItem('barber_user', JSON.stringify(res.data.user));
+        }
+
+        const userRole = res.data.user?.role;
+        const targetRoute = userRole === 'SUPER_ADMIN' || userRole === 'ADMIN' ? '/admin' : '/dashboard';
+
+        console.log(`[Client Log] Redirecionando usuário (Role: ${userRole}) para: ${targetRoute}`);
+
+        setTimeout(() => {
+          router.push(targetRoute);
+        }, 500);
       } else {
-        router.push('/dashboard');
+        setLoading(false);
+        const errorMessage = res.error || 'Falha ao conectar, tente novamente';
+        console.warn('[Client Log] Falha no login:', errorMessage);
+        setError(errorMessage);
       }
-    } else {
-      setError(res.error || 'Falha ao realizar login');
+    } catch (err: any) {
+      setLoading(false);
+      console.error('[Client Log] Erro inesperado ao tentar login:', err);
+      setError('Falha ao conectar, tente novamente');
     }
   };
 
@@ -39,8 +67,14 @@ export default function LoginPage() {
     <div className="max-w-md mx-auto my-12 p-6 bg-slate-900 border border-slate-800 rounded-xl shadow-xl">
       <h2 className="text-2xl font-bold text-center text-amber-500 mb-6">Acessar Conta</h2>
 
+      {successMsg && (
+        <div className="bg-green-500/10 border border-green-500 text-green-400 p-3 rounded-lg mb-4 text-sm font-semibold flex items-center justify-center gap-2">
+          {successMsg}
+        </div>
+      )}
+
       {error && (
-        <div className="bg-red-500/10 border border-red-500 text-red-400 p-3 rounded-lg mb-4 text-sm">
+        <div className="bg-red-500/10 border border-red-500 text-red-400 p-3 rounded-lg mb-4 text-sm font-semibold text-center">
           {error}
         </div>
       )}
