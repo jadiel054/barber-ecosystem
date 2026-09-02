@@ -30,21 +30,32 @@ enum SubscriptionStatus {
 }
 
 model Barbershop {
-  id           String    @id @default(uuid())
-  name         String
-  slug         String    @unique
-  phone        String?
-  address      String?
-  neighborhood String?
-  city         String?
-  state        String?
-  logoUrl      String?
-  coverUrl     String?
-  description  String?
-  openingHours Json?
-  active       Boolean   @default(true)
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  id              String    @id @default(uuid())
+  name            String
+  slug            String    @unique
+  phone           String?
+  address         String?
+  neighborhood    String?
+  city            String?
+  state           String?
+  zipCode         String?
+  street          String?
+  number          String?
+  email           String?
+  cnpj            String?   @unique
+  corporateName   String?
+  cnpjStatus      String?
+  cnpjStatusDate  DateTime?
+  cnpjConsultedAt DateTime?
+  cnpjSource      String?
+  cnae            String?
+  logoUrl         String?
+  coverUrl        String?
+  description     String?
+  openingHours    Json?
+  active          Boolean   @default(true)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 
   ownerId      String?   @unique
   owner        User?     @relation("BarbershopOwner", fields: [ownerId], references: [id], onDelete: SetNull)
