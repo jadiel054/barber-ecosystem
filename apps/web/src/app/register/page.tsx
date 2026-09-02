@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { apiFetch } from '@/lib/api';
 
 export default function RegisterPage() {
@@ -11,17 +12,38 @@ export default function RegisterPage() {
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [role, setRole] = useState('CLIENT');
+
+  // Consent Checkboxes
+  const [agreeTerms, setAgreeTerms] = useState(false);
+  const [allowMarketing, setAllowMarketing] = useState(false);
+  const [allowCookies, setAllowCookies] = useState(false);
+
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+
+    if (!agreeTerms) {
+      setError('Você deve concordar com os Termos de Uso e Política de Privacidade para realizar o cadastro.');
+      return;
+    }
+
     setLoading(true);
 
     const res = await apiFetch<{ user: any }>('/auth/register', {
       method: 'POST',
-      body: JSON.stringify({ name, email, phone, password, role }),
+      body: JSON.stringify({
+        name,
+        email,
+        phone,
+        password,
+        role,
+        agreeTerms,
+        allowMarketing,
+        allowCookies,
+      }),
     });
 
     setLoading(false);
@@ -109,10 +131,57 @@ export default function RegisterPage() {
           />
         </div>
 
+        {/* Termos e Consentimentos LGPD */}
+        <div className="pt-2 border-t border-slate-800 space-y-3">
+          {/* Checkbox Obrigatório */}
+          <label className="flex items-start gap-2.5 cursor-pointer text-xs text-slate-300">
+            <input
+              type="checkbox"
+              checked={agreeTerms}
+              onChange={(e) => setAgreeTerms(e.target.checked)}
+              required
+              className="mt-0.5 rounded border-slate-700 bg-slate-800 text-amber-500 focus:ring-amber-500"
+            />
+            <span>
+              <strong className="text-amber-400 font-semibold">[OBRIGATÓRIO]</strong> Li e concordo com os{' '}
+              <Link href="/termos" target="_blank" className="text-amber-500 underline hover:text-amber-400">
+                Termos de Uso
+              </Link>{' '}
+              e{' '}
+              <Link href="/privacidade" target="_blank" className="text-amber-500 underline hover:text-amber-400">
+                Política de Privacidade
+              </Link>
+              .
+            </span>
+          </label>
+
+          {/* Checkbox Opcional - Comunicações */}
+          <label className="flex items-start gap-2.5 cursor-pointer text-xs text-slate-300">
+            <input
+              type="checkbox"
+              checked={allowMarketing}
+              onChange={(e) => setAllowMarketing(e.target.checked)}
+              className="mt-0.5 rounded border-slate-700 bg-slate-800 text-amber-500 focus:ring-amber-500"
+            />
+            <span>Consinto em receber comunicações, novidades e ofertas por e-mail ou WhatsApp (Opcional).</span>
+          </label>
+
+          {/* Checkbox Opcional - Cookies */}
+          <label className="flex items-start gap-2.5 cursor-pointer text-xs text-slate-300">
+            <input
+              type="checkbox"
+              checked={allowCookies}
+              onChange={(e) => setAllowCookies(e.target.checked)}
+              className="mt-0.5 rounded border-slate-700 bg-slate-800 text-amber-500 focus:ring-amber-500"
+            />
+            <span>Consinto com o uso de cookies não essenciais para personalização de navegação (Opcional).</span>
+          </label>
+        </div>
+
         <button
           type="submit"
-          disabled={loading}
-          className="w-full bg-amber-600 hover:bg-amber-500 text-white font-semibold py-2.5 rounded-lg transition duration-200 disabled:opacity-50"
+          disabled={loading || !agreeTerms}
+          className="w-full bg-amber-600 hover:bg-[#e67700] hover:scale-[1.02] active:scale-[0.98] text-white font-semibold py-2.5 rounded-lg transition-all duration-200 disabled:opacity-50 disabled:hover:scale-100 disabled:cursor-not-allowed"
         >
           {loading ? 'Cadastrando...' : 'Criar Conta'}
         </button>

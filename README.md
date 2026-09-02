@@ -9,7 +9,7 @@
 O **Central de Barbearias** é uma solução profissional multi-tenant no modelo SaaS que conecta clientes e barbearias.
 - **Para o Cliente**: Plataforma fluida para encontrar barbearias, consultar horários disponíveis, agendar serviços, avaliar atendimentos e favoritar estabelecimentos.
 - **Para o Barbeiro / Dono**: Painel completo para gerenciar agenda, equipe, comissões, catálogo de serviços, perfil público, feed de notícias/promoções, folgas e assinaturas do sistema.
-- **Para o SuperAdmin**: Controle centralizado de barbearias ativas, planos SaaS e métricas globais.
+- **Para o Administrador Geral**: Painel completo para controle de barbearias, comunicados em massa, anúncios/promoções, gerenciamento de recursos premium, contatos e configurações da plataforma.
 
 ---
 
@@ -49,6 +49,11 @@ O modelo de dados segue as especificações da **Central de Barbearias Blueprint
 - **`Review`**: Avaliação com nota e comentários deixados pelos clientes após os atendimentos.
 - **`Favorite`**: Barbearias favoritadas pelos clientes para acesso rápido.
 - **`Publication`**: Postagens, comunicados e fotos de cortes publicados pelas barbearias.
+- **`ContactMessage`**: Mensagens de contato enviadas pelos usuários/barbearias para a administração.
+- **`BroadcastCommunication`**: Comunicados em massa enviados ou agendados pela administração.
+- **`PlatformAnnouncement`**: Anúncios, cupons e promoções exibidas nos painéis conforme público-alvo.
+- **`FeatureToggle` + `FeatureToggleHistory`**: Controle de chaveamento (Ativado/Desativado) de recursos premium com log de auditoria.
+- **`PlatformSettings`**: Configurações gerais da plataforma, incluindo nome, suporte e modo de manutenção.
 
 ---
 
@@ -122,20 +127,30 @@ pnpm --filter web build
 
 ## 📌 Principais Módulos do Sistema
 
-1. **Área Pública (Cliente)**:
-   - Busca por nome, cidade ou bairro
-   - Perfil detalhado da barbearia com fotos, horários, serviços e avaliações
-   - Agendamento de horários em tempo real
-   - Histórico de agendamentos e estabelecimentos favoritos
-2. **Painel do Barbeiro / Dono**:
-   - Dashboard com estatísticas e métricas de atendimentos
-   - Gestão de agenda e bloqueios
-   - Cadastro de equipe (profissionais) e definição de comissões
-   - Publicação de fotos e comunicados no feed
-   - Gestão de folgas e feriados
-3. **Painel SuperAdmin**:
-   - Gestão global de barbearias cadastradas
-   - Controle de planos SaaS e assinaturas ativas
+1. **Área Pública (Cliente & Visitante)**:
+   - Busca por nome, cidade ou bairro.
+   - Perfil detalhado da barbearia com fotos, horários, serviços e avaliações.
+   - Agendamento de horários em tempo real.
+   - Histórico de agendamentos e estabelecimentos favoritos.
+   - **Páginas Legais & LGPD**: Termos de Uso (`/termos`), Política de Privacidade (`/privacidade`), Política de Cookies (`/cookies`) e Explicação de Consentimentos (`/consentimento`).
+   - Rodapé fixo global com links legais e contato.
+
+2. **Cadastro & Área do Usuário (LGPD)**:
+   - Cadastro com aceitação obrigatória dos Termos e Privacidade e caixas opcionais para comunicações e cookies.
+   - **Baixar Meus Dados**: Exportação completa em arquivo JSON de todos os dados do usuário.
+   - **Excluir Minha Conta**: Exclusão de conta com validação obrigatória por senha.
+
+3. **Painel do Barbeiro / Dono**:
+   - Dashboard com estatísticas e métricas de atendimentos.
+   - Gestão de agenda e catálogo de serviços.
+   - Exibição de anúncios/promoções da plataforma e avisos de recursos desativados.
+
+4. **Painel Completo de Administrador (`/admin`)**:
+   - **🏢 Gestão de Barbearias**: Filtros por status, cidade e plano. Visualização de detalhes, alteração de plano, redefinição de senha do dono, suspensão e exclusão.
+   - **📬 Contatos & Comunicados**: Leitura e resposta direta a mensagens de contato, envio de comunicados em massa por público-alvo e histórico.
+   - **📢 Anúncios & Promoções**: Criação de banners, descontos, períodos grátis e cupons promocionais com métricas de visualização e uso.
+   - **⚙️ Controle de Recursos Premium**: Interruptores para Agente de IA, Relatórios Avançados, Integração WhatsApp/Instagram, Personalização, Fidelidade e Multi-unidades com registro de justificativa e histórico.
+   - **⚙️ Configurações Gerais**: Dados da plataforma, e-mail de suporte e alternância de modo de manutenção.
 
 ---
 

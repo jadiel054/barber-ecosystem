@@ -6,6 +6,104 @@ import { Role } from '@prisma/client';
 
 export const userRouter = Router();
 
+// Protected (LGPD): Export all personal data stored for current user ("Baixar Meus Dados")
+userRouter.get('/me/export', authenticate, async (req: AuthenticatedRequest, res, next) => {
+  try {
+    const userId = req.user?.userId;
+
+    if (!userId) {
+      return res.status(401).json({ success: false, error: 'Unauthorized' });
+    }
+
+    const userData = await prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        phone: true,
+        avatarUrl: true,
+        role: true,
+        barbershopId: true,
+        createdAt: true,
+        updatedAt: true,
+        ownedBarbershop: true,
+        clientAppointments: {
+          include: {
+            barbershop: { select: { name: true, phone: true } },
+            service: { select: { name: true, price: true } },
+            barber: { select: { name: true } },
+          },
+        },
+        barberAppointments: {
+          include: {
+            service: { select: { name: true } },
+            client: { select: { name: true, phone: true } },
+          },
+        },
+        reviews: true,
+        favorites: {
+          include: {
+            barbershop: { select: { name: true, city: true } },
+          },
+        },
+      },
+    });
+
+    if (!userData) {
+      return res.status(404).json({ success: false, error: 'User not found' });
+    }
+
+    return res.json({
+      success: true,
+      data: {
+        exportTimestamp: new Date().toISOString(),
+        user: userData,
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Protected (LGPD): Delete current user account with password confirmation ("Excluir Minha Conta")
+userRouter.delete('/me', authenticate, async (req: AuthenticatedRequest, res, next) => {
+  try {
+    const userId = req.user?.userId;
+    const { password } = req.body;
+
+    if (!userId) {
+      return res.status(401).json({ success: false, error: 'Unauthorized' });
+    }
+
+    if (!password) {
+      return res.status(400).json({ success: false, error: 'Confirmação de senha é obrigatória para excluir a conta' });
+    }
+
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user) {
+      return res.status(404).json({ success: false, error: 'Usuário não encontrado' });
+    }
+
+    const isMatch = await comparePassword(password, user.password);
+    if (!isMatch) {
+      return res.status(400).json({ success: false, error: 'Senha incorreta' });
+    }
+
+    // Delete user from database (Cascades or set null as defined in schema)
+    await prisma.user.delete({ where: { id: userId } });
+
+    res.clearCookie('barber_token');
+
+    return res.json({
+      success: true,
+      message: 'Sua conta e dados pessoais foram excluídos com sucesso.',
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // Protected: Update current user profile (name/phone)
 userRouter.patch('/me', authenticate, async (req: AuthenticatedRequest, res, next) => {
   try {

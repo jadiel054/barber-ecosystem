@@ -10,6 +10,7 @@ import { serviceRouter } from './routes/services';
 import { userRouter } from './routes/users';
 import { appointmentRouter } from './routes/appointments';
 import { adminRouter } from './routes/admin';
+import { publicRouter } from './routes/public';
 
 export const app = express();
 
@@ -35,6 +36,7 @@ app.use('/api/services', serviceRouter);
 app.use('/api/users', userRouter);
 app.use('/api/appointments', appointmentRouter);
 app.use('/api/admin', adminRouter);
+app.use('/api', publicRouter);
 
 app.use(errorHandler);
 

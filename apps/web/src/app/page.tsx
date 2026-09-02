@@ -18,28 +18,28 @@ export default function HomePage() {
       <div className="flex justify-center gap-4 pt-4">
         <Link
           href="/booking"
-          className="bg-amber-600 hover:bg-amber-500 text-white font-semibold px-6 py-3 rounded-lg shadow-lg shadow-amber-600/20 transition"
+          className="bg-amber-600 hover:bg-[#e67700] hover:scale-[1.03] active:scale-[0.98] text-white font-semibold px-6 py-3 rounded-[14px] shadow-md shadow-amber-600/20 transition-all duration-200 ease-in-out motion-reduce:transform-none motion-reduce:transition-none"
         >
           Agendar Horário
         </Link>
         <Link
           href="/register"
-          className="bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold px-6 py-3 rounded-lg border border-slate-700 transition"
+          className="bg-slate-800 hover:bg-slate-700 hover:scale-[1.03] active:scale-[0.98] text-slate-200 font-semibold px-6 py-3 rounded-[14px] border border-slate-700 transition-all duration-200 ease-in-out motion-reduce:transform-none motion-reduce:transition-none"
         >
           Cadastrar Barbearia
         </Link>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-left max-w-5xl mx-auto mt-16">
-        <div className="p-6 bg-slate-900 border border-slate-800 rounded-xl">
+        <div className="p-6 bg-slate-900 border border-slate-800 rounded-[14px] hover:-translate-y-1 hover:shadow-xl hover:shadow-black/50 hover:border-slate-700 transition-all duration-200 ease-in-out motion-reduce:transform-none">
           <div className="text-2xl mb-2">🏢</div>
-          <h3 className="text-lg font-bold text-white mb-2">Multi-tenancy Total</h3>
+          <h3 className="text-lg font-bold text-white mb-2">Dados isolados e protegidos</h3>
           <p className="text-slate-400 text-sm">
             Isolamento de dados e personalização por barbearia em um mesmo ecossistema escalável.
           </p>
         </div>
 
-        <div className="p-6 bg-slate-900 border border-slate-800 rounded-xl">
+        <div className="p-6 bg-slate-900 border border-slate-800 rounded-[14px] hover:-translate-y-1 hover:shadow-xl hover:shadow-black/50 hover:border-slate-700 transition-all duration-200 ease-in-out motion-reduce:transform-none">
           <div className="text-2xl mb-2">📅</div>
           <h3 className="text-lg font-bold text-white mb-2">Agendamentos Simples</h3>
           <p className="text-slate-400 text-sm">
@@ -47,7 +47,7 @@ export default function HomePage() {
           </p>
         </div>
 
-        <div className="p-6 bg-slate-900 border border-slate-800 rounded-xl">
+        <div className="p-6 bg-slate-900 border border-slate-800 rounded-[14px] hover:-translate-y-1 hover:shadow-xl hover:shadow-black/50 hover:border-slate-700 transition-all duration-200 ease-in-out motion-reduce:transform-none">
           <div className="text-2xl mb-2">📊</div>
           <h3 className="text-lg font-bold text-white mb-2">Painel de Gestão</h3>
           <p className="text-slate-400 text-sm">
