@@ -20,8 +20,10 @@ export async function apiFetch<T>(
     ...(options.headers as Record<string, string>),
   };
 
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
+  const authToken = token || (typeof window !== 'undefined' ? localStorage.getItem('barber_token') : null);
+
+  if (authToken) {
+    headers['Authorization'] = `Bearer ${authToken}`;
   }
 
   if (tenantId) {
@@ -50,9 +52,10 @@ export async function apiFetch<T>(
         : 'A resposta da API não está em formato JSON.',
     };
   } catch (err: any) {
+    console.error('[API Log] Erro de conexão:', err);
     return {
       success: false,
-      error: err.message || 'Error connecting to API server',
+      error: 'Falha ao conectar, tente novamente',
     };
   }
 }

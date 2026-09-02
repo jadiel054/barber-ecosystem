@@ -69,19 +69,23 @@ authRouter.post('/register', async (req, res, next) => {
 authRouter.post('/login', async (req, res, next) => {
   try {
     const { email, password } = req.body;
+    console.log(`[Auth Log] Tentativa de login para email: "${email}"`);
 
     if (!email || !password) {
-      return res.status(400).json({ success: false, error: 'Email and password are required' });
+      console.warn(`[Auth Log] Tentativa de login com campos incompletos.`);
+      return res.status(400).json({ success: false, error: 'E-mail e senha são obrigatórios' });
     }
 
     const user = await prisma.user.findUnique({ where: { email } });
     if (!user) {
-      return res.status(401).json({ success: false, error: 'Invalid credentials' });
+      console.warn(`[Auth Log] E-mail não encontrado no banco de dados: "${email}"`);
+      return res.status(401).json({ success: false, error: 'E-mail não cadastrado' });
     }
 
     const isMatch = await comparePassword(password, user.password);
     if (!isMatch) {
-      return res.status(401).json({ success: false, error: 'Invalid credentials' });
+      console.warn(`[Auth Log] Senha incorreta para o email: "${email}"`);
+      return res.status(401).json({ success: false, error: 'Senha incorreta' });
     }
 
     const token = generateToken({
@@ -90,6 +94,8 @@ authRouter.post('/login', async (req, res, next) => {
       role: user.role,
       barbershopId: user.barbershopId,
     });
+
+    console.log(`[Auth Log] Login bem-sucedido para o email: "${email}" (ID: ${user.id}, Role: ${user.role})`);
 
     res.cookie('barber_token', token, {
       httpOnly: true,
@@ -101,6 +107,7 @@ authRouter.post('/login', async (req, res, next) => {
     return res.json({
       success: true,
       data: {
+        token,
         user: {
           id: user.id,
           name: user.name,
@@ -111,6 +118,7 @@ authRouter.post('/login', async (req, res, next) => {
       },
     });
   } catch (err) {
+    console.error(`[Auth Log] Erro ao processar login:`, err);
     next(err);
   }
 });
