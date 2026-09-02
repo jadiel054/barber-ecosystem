@@ -3,16 +3,49 @@ import crypto from 'crypto';
 import { prisma } from '../config/prisma';
 import { authenticate, requireRole, AuthenticatedRequest } from '../middlewares/auth';
 import { hashPassword } from '../utils/auth';
+import { sanitizeCNPJ, isValidCNPJ } from '../utils/cnpj';
 
 export const adminRouter = Router();
 
 const ADMIN_ROLES = ['SUPER_ADMIN', 'ADMIN'];
 
+// Default Plans Seeding helper
+const DEFAULT_PLANS = [
+  {
+    name: 'Gratuito',
+    description: 'Plano inicial de teste sem custos com recursos essenciais',
+    price: 0,
+    interval: 'MONTHLY',
+    features: { maxBarbers: 1, maxAppointmentsMonth: 50, customPage: false, reports: false },
+  },
+  {
+    name: 'Básico',
+    description: 'Ideal para barbearias individuais e pequeno porte',
+    price: 49.90,
+    interval: 'MONTHLY',
+    features: { maxBarbers: 2, maxAppointmentsMonth: 200, customPage: true, reports: false },
+  },
+  {
+    name: 'Premium',
+    description: 'Para barbearias em crescimento com suporte completo',
+    price: 99.90,
+    interval: 'MONTHLY',
+    features: { maxBarbers: 5, maxAppointmentsMonth: 1000, customPage: true, reports: true },
+  },
+  {
+    name: 'Pro',
+    description: 'Plano ilimitado para redes de barbearias e grandes equipes',
+    price: 199.90,
+    interval: 'MONTHLY',
+    features: { maxBarbers: 999, maxAppointmentsMonth: 99999, customPage: true, reports: true, aiAgent: true },
+  },
+];
+
 // ==========================================
 // 🏢 1. GESTÃO DE BARBEARIAS
 // ==========================================
 
-// GET /admin/barbershops — listar barbearias com filtros (status, plano, cidade, busca por nome/slug)
+// GET /admin/barbershops — listar barbearias com filtros (status, plano, cidade, busca por nome/slug/cnpj)
 adminRouter.get('/barbershops', authenticate, requireRole(ADMIN_ROLES), async (req: AuthenticatedRequest, res, next) => {
   try {
     const { status, city, plan, search } = req.query;
@@ -30,10 +63,13 @@ adminRouter.get('/barbershops', authenticate, requireRole(ADMIN_ROLES), async (r
     }
 
     if (search && typeof search === 'string') {
+      const cleanSearch = search.trim();
       where.OR = [
-        { name: { contains: search, mode: 'insensitive' } },
-        { slug: { contains: search, mode: 'insensitive' } },
-        { city: { contains: search, mode: 'insensitive' } },
+        { name: { contains: cleanSearch, mode: 'insensitive' } },
+        { slug: { contains: cleanSearch, mode: 'insensitive' } },
+        { city: { contains: cleanSearch, mode: 'insensitive' } },
+        { cnpj: { contains: sanitizeCNPJ(cleanSearch) } },
+        { corporateName: { contains: cleanSearch, mode: 'insensitive' } },
       ];
     }
 
@@ -70,6 +106,130 @@ adminRouter.get('/barbershops', authenticate, requireRole(ADMIN_ROLES), async (r
   }
 });
 
+// POST /admin/barbershops — cadastrar nova barbearia com dados completos + CNPJ
+adminRouter.post('/barbershops', authenticate, requireRole(ADMIN_ROLES), async (req: AuthenticatedRequest, res, next) => {
+  try {
+    const {
+      name,
+      slug,
+      phone,
+      address,
+      neighborhood,
+      city,
+      state,
+      zipCode,
+      street,
+      number,
+      email,
+      cnpj,
+      corporateName,
+      cnpjStatus,
+      cnpjStatusDate,
+      cnpjConsultedAt,
+      cnpjSource,
+      cnae,
+      ownerEmail,
+      ownerName,
+      planId,
+    } = req.body;
+
+    if (!name || !slug) {
+      return res.status(400).json({ success: false, error: 'Nome e slug são obrigatórios' });
+    }
+
+    const cleanSlug = slug.trim().toLowerCase().replace(/[^a-z0-9-]/g, '-');
+    const existingSlug = await prisma.barbershop.findUnique({ where: { slug: cleanSlug } });
+    if (existingSlug) {
+      return res.status(400).json({ success: false, error: 'O slug informado já está em uso por outra barbearia' });
+    }
+
+    const cleanCnpj = cnpj ? sanitizeCNPJ(cnpj) : null;
+    if (cleanCnpj) {
+      if (!isValidCNPJ(cleanCnpj)) {
+        return res.status(400).json({ success: false, error: 'CNPJ inválido, verifique os dígitos' });
+      }
+
+      const existingCnpj = await prisma.barbershop.findUnique({ where: { cnpj: cleanCnpj } });
+      if (existingCnpj) {
+        return res.status(400).json({ success: false, error: 'CNPJ já cadastrado para outra barbearia' });
+      }
+    }
+
+    // Process Owner User if provided
+    let ownerId: string | undefined = undefined;
+    if (ownerEmail) {
+      let owner = await prisma.user.findUnique({ where: { email: ownerEmail } });
+      if (!owner) {
+        const tempPassword = crypto.randomBytes(4).toString('hex');
+        const hashedPassword = await hashPassword(tempPassword);
+
+        owner = await prisma.user.create({
+          data: {
+            email: ownerEmail,
+            name: ownerName || name,
+            password: hashedPassword,
+            role: 'ADMIN',
+          },
+        });
+      }
+      ownerId = owner.id;
+    }
+
+    const barbershop = await prisma.barbershop.create({
+      data: {
+        name,
+        slug: cleanSlug,
+        phone,
+        address: address || (street ? `${street}${number ? `, ${number}` : ''}` : undefined),
+        neighborhood,
+        city,
+        state,
+        zipCode,
+        street,
+        number,
+        email,
+        cnpj: cleanCnpj,
+        corporateName,
+        cnpjStatus,
+        cnpjStatusDate: cnpjStatusDate ? new Date(cnpjStatusDate) : null,
+        cnpjConsultedAt: cnpjConsultedAt ? new Date(cnpjConsultedAt) : new Date(),
+        cnpjSource: cnpjSource || (cleanCnpj ? 'Receita Federal via API' : null),
+        cnae,
+        ownerId,
+      },
+    });
+
+    if (ownerId) {
+      await prisma.user.update({
+        where: { id: ownerId },
+        data: { barbershopId: barbershop.id },
+      });
+    }
+
+    // Attach plan subscription if specified
+    if (planId) {
+      const plan = await prisma.plan.findUnique({ where: { id: planId } });
+      if (plan) {
+        await prisma.subscription.create({
+          data: {
+            barbershopId: barbershop.id,
+            planId: plan.id,
+            status: 'ACTIVE',
+          },
+        });
+      }
+    }
+
+    return res.status(201).json({
+      success: true,
+      message: 'Barbearia cadastrada com sucesso',
+      data: barbershop,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // GET /admin/barbershops/:id — detalhes da barbearia
 adminRouter.get('/barbershops/:id', authenticate, requireRole(ADMIN_ROLES), async (req: AuthenticatedRequest, res, next) => {
   try {
@@ -91,6 +251,88 @@ adminRouter.get('/barbershops/:id', authenticate, requireRole(ADMIN_ROLES), asyn
     }
 
     return res.json({ success: true, data: barbershop });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// PUT /admin/barbershops/:id — editar barbearia existente
+adminRouter.put('/barbershops/:id', authenticate, requireRole(ADMIN_ROLES), async (req: AuthenticatedRequest, res, next) => {
+  try {
+    const { id } = req.params;
+    const {
+      name,
+      slug,
+      phone,
+      address,
+      neighborhood,
+      city,
+      state,
+      zipCode,
+      street,
+      number,
+      email,
+      cnpj,
+      corporateName,
+      cnpjStatus,
+      cnpjStatusDate,
+      cnpjConsultedAt,
+      cnpjSource,
+      cnae,
+      planId,
+      active,
+    } = req.body;
+
+    const existingShop = await prisma.barbershop.findUnique({ where: { id } });
+    if (!existingShop) {
+      return res.status(404).json({ success: false, error: 'Barbearia não encontrada' });
+    }
+
+    let cleanCnpj = cnpj ? sanitizeCNPJ(cnpj) : existingShop.cnpj;
+    if (cleanCnpj && cleanCnpj !== existingShop.cnpj) {
+      if (!isValidCNPJ(cleanCnpj)) {
+        return res.status(400).json({ success: false, error: 'CNPJ inválido, verifique os dígitos' });
+      }
+      const otherCnpj = await prisma.barbershop.findUnique({ where: { cnpj: cleanCnpj } });
+      if (otherCnpj && otherCnpj.id !== id) {
+        return res.status(400).json({ success: false, error: 'Este CNPJ já está cadastrado em outra barbearia' });
+      }
+    }
+
+    const updated = await prisma.barbershop.update({
+      where: { id },
+      data: {
+        name: name || existingShop.name,
+        slug: slug ? slug.trim().toLowerCase().replace(/[^a-z0-9-]/g, '-') : existingShop.slug,
+        phone: phone !== undefined ? phone : existingShop.phone,
+        address: address !== undefined ? address : existingShop.address,
+        neighborhood: neighborhood !== undefined ? neighborhood : existingShop.neighborhood,
+        city: city !== undefined ? city : existingShop.city,
+        state: state !== undefined ? state : existingShop.state,
+        zipCode: zipCode !== undefined ? zipCode : existingShop.zipCode,
+        street: street !== undefined ? street : existingShop.street,
+        number: number !== undefined ? number : existingShop.number,
+        email: email !== undefined ? email : existingShop.email,
+        cnpj: cleanCnpj,
+        corporateName: corporateName !== undefined ? corporateName : existingShop.corporateName,
+        cnpjStatus: cnpjStatus !== undefined ? cnpjStatus : existingShop.cnpjStatus,
+        cnpjStatusDate: cnpjStatusDate ? new Date(cnpjStatusDate) : existingShop.cnpjStatusDate,
+        cnpjConsultedAt: cnpjConsultedAt ? new Date(cnpjConsultedAt) : existingShop.cnpjConsultedAt,
+        cnpjSource: cnpjSource !== undefined ? cnpjSource : existingShop.cnpjSource,
+        cnae: cnae !== undefined ? cnae : existingShop.cnae,
+        active: active !== undefined ? active : existingShop.active,
+      },
+    });
+
+    if (planId) {
+      await prisma.subscription.upsert({
+        where: { barbershopId: id },
+        create: { barbershopId: id, planId, status: 'ACTIVE' },
+        update: { planId, status: 'ACTIVE' },
+      });
+    }
+
+    return res.json({ success: true, message: 'Barbearia atualizada com sucesso', data: updated });
   } catch (err) {
     next(err);
   }
@@ -175,6 +417,102 @@ adminRouter.delete('/barbershops/:id', authenticate, requireRole(ADMIN_ROLES), a
   }
 });
 
+// ==========================================
+// 👤 2. GESTÃO DE USUÁRIOS & PERFIS DE ACESSO
+// ==========================================
+
+// GET /admin/users — listar todos os usuários com filtro por papel/nome
+adminRouter.get('/users', authenticate, requireRole(ADMIN_ROLES), async (req: AuthenticatedRequest, res, next) => {
+  try {
+    const { role, search } = req.query;
+
+    const where: any = {};
+    if (role && typeof role === 'string' && role !== 'ALL') {
+      where.role = role;
+    }
+
+    if (search && typeof search === 'string') {
+      const clean = search.trim();
+      where.OR = [
+        { name: { contains: clean, mode: 'insensitive' } },
+        { email: { contains: clean, mode: 'insensitive' } },
+        { phone: { contains: clean, mode: 'insensitive' } },
+      ];
+    }
+
+    const users = await prisma.user.findMany({
+      where,
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        phone: true,
+        role: true,
+        createdAt: true,
+        updatedAt: true,
+        barbershop: {
+          select: { id: true, name: true, slug: true },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    return res.json({ success: true, data: users });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// PATCH /admin/users/:id/role — alterar perfil de acesso do usuário
+adminRouter.patch('/users/:id/role', authenticate, requireRole(ADMIN_ROLES), async (req: AuthenticatedRequest, res, next) => {
+  try {
+    const { id } = req.params;
+    const { role } = req.body;
+
+    const validRoles = ['SUPER_ADMIN', 'ADMIN', 'BARBER', 'CLIENT'];
+    if (!role || !validRoles.includes(role)) {
+      return res.status(400).json({ success: false, error: `Perfil inválido. Use um dos seguintes: ${validRoles.join(', ')}` });
+    }
+
+    const user = await prisma.user.findUnique({ where: { id } });
+    if (!user) {
+      return res.status(404).json({ success: false, error: 'Usuário não encontrado' });
+    }
+
+    const updated = await prisma.user.update({
+      where: { id },
+      data: { role: role as any },
+      select: { id: true, name: true, email: true, role: true },
+    });
+
+    return res.json({ success: true, message: 'Perfil do usuário atualizado', data: updated });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// DELETE /admin/users/:id — excluir usuário
+adminRouter.delete('/users/:id', authenticate, requireRole(ADMIN_ROLES), async (req: AuthenticatedRequest, res, next) => {
+  try {
+    const { id } = req.params;
+
+    if (req.user?.userId === id) {
+      return res.status(400).json({ success: false, error: 'Você não pode excluir sua própria conta' });
+    }
+
+    const user = await prisma.user.findUnique({ where: { id } });
+    if (!user) {
+      return res.status(404).json({ success: false, error: 'Usuário não encontrado' });
+    }
+
+    await prisma.user.delete({ where: { id } });
+
+    return res.json({ success: true, message: 'Usuário excluído com sucesso' });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // POST /admin/users/:id/reset-password — gera senha temporária para proprietário/usuário
 adminRouter.post('/users/:id/reset-password', authenticate, requireRole(ADMIN_ROLES), async (req: AuthenticatedRequest, res, next) => {
   try {
@@ -211,7 +549,106 @@ adminRouter.post('/users/:id/reset-password', authenticate, requireRole(ADMIN_RO
 });
 
 // ==========================================
-// 📬 2. CONTATO COM BARBEARIAS & COMUNICADOS
+// 💎 3. GESTÃO DE PLANOS & LIMITES
+// ==========================================
+
+// GET /admin/plans — listar planos e inicializar padrão se vazio
+adminRouter.get('/plans', authenticate, requireRole(ADMIN_ROLES), async (req: AuthenticatedRequest, res, next) => {
+  try {
+    let plans = await prisma.plan.findMany({
+      include: { _count: { select: { subscriptions: true } } },
+      orderBy: { price: 'asc' },
+    });
+
+    if (plans.length === 0) {
+      for (const def of DEFAULT_PLANS) {
+        await prisma.plan.create({ data: def });
+      }
+      plans = await prisma.plan.findMany({
+        include: { _count: { select: { subscriptions: true } } },
+        orderBy: { price: 'asc' },
+      });
+    }
+
+    return res.json({ success: true, data: plans });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /admin/plans — criar novo plano
+adminRouter.post('/plans', authenticate, requireRole(ADMIN_ROLES), async (req: AuthenticatedRequest, res, next) => {
+  try {
+    const { name, description, price, interval, features, active } = req.body;
+
+    if (!name || price === undefined) {
+      return res.status(400).json({ success: false, error: 'Nome e preço são obrigatórios' });
+    }
+
+    const plan = await prisma.plan.create({
+      data: {
+        name,
+        description,
+        price: parseFloat(price),
+        interval: interval || 'MONTHLY',
+        features: features || {},
+        active: active !== undefined ? active : true,
+      },
+    });
+
+    return res.status(201).json({ success: true, message: 'Plano criado com sucesso', data: plan });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// PATCH /admin/plans/:id — editar plano
+adminRouter.patch('/plans/:id', authenticate, requireRole(ADMIN_ROLES), async (req: AuthenticatedRequest, res, next) => {
+  try {
+    const { id } = req.params;
+    const { name, description, price, interval, features, active } = req.body;
+
+    const updated = await prisma.plan.update({
+      where: { id },
+      data: {
+        name: name !== undefined ? name : undefined,
+        description: description !== undefined ? description : undefined,
+        price: price !== undefined ? parseFloat(price) : undefined,
+        interval: interval !== undefined ? interval : undefined,
+        features: features !== undefined ? features : undefined,
+        active: active !== undefined ? active : undefined,
+      },
+    });
+
+    return res.json({ success: true, message: 'Plano atualizado', data: updated });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// DELETE /admin/plans/:id — excluir plano
+adminRouter.delete('/plans/:id', authenticate, requireRole(ADMIN_ROLES), async (req: AuthenticatedRequest, res, next) => {
+  try {
+    const { id } = req.params;
+
+    const subscriptionsCount = await prisma.subscription.count({ where: { planId: id } });
+    if (subscriptionsCount > 0) {
+      return res.status(400).json({
+        success: false,
+        error: `Não é possível excluir este plano pois existem ${subscriptionsCount} barbearia(s) assinante(s). Desative-o em vez de excluir.`,
+      });
+    }
+
+    await prisma.plan.delete({ where: { id } });
+
+    return res.json({ success: true, message: 'Plano excluído com sucesso' });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ==========================================
+// 📬 4. CONTATO COM BARBEARIAS & COMUNICADOS
 // ==========================================
 
 // GET /admin/contacts — listar mensagens recebidas
@@ -246,6 +683,23 @@ adminRouter.patch('/contacts/:id/reply', authenticate, requireRole(ADMIN_ROLES),
         reply,
         status: 'REPLIED',
       },
+    });
+
+    return res.json({ success: true, data: updated });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// PATCH /admin/contacts/:id/status — alternar status de leitura/pendente
+adminRouter.patch('/contacts/:id/status', authenticate, requireRole(ADMIN_ROLES), async (req: AuthenticatedRequest, res, next) => {
+  try {
+    const { id } = req.params;
+    const { status } = req.body;
+
+    const updated = await prisma.contactMessage.update({
+      where: { id },
+      data: { status: status || 'READ' },
     });
 
     return res.json({ success: true, data: updated });
@@ -294,7 +748,7 @@ adminRouter.get('/broadcasts', authenticate, requireRole(ADMIN_ROLES), async (re
 });
 
 // ==========================================
-// 📢 3. ANÚNCIOS E PROMOÇÕES DA PLATAFORMA
+// 📢 5. ANÚNCIOS E PROMOÇÕES DA PLATAFORMA
 // ==========================================
 
 // GET /admin/announcements — listar anúncios
@@ -380,7 +834,7 @@ adminRouter.delete('/announcements/:id', authenticate, requireRole(ADMIN_ROLES),
 });
 
 // ==========================================
-// ⚙️ 4. CONTROLE DE FUNCIONALIDADES PREMIUM
+// ⚙️ 6. CONTROLE DE FUNCIONALIDADES PREMIUM
 // ==========================================
 
 const DEFAULT_FEATURES = [
@@ -468,7 +922,7 @@ adminRouter.get('/features/history', authenticate, requireRole(ADMIN_ROLES), asy
 });
 
 // ==========================================
-// ⚙️ 5. CONFIGURAÇÕES GERAIS DA PLATAFORMA
+// ⚙️ 7. CONFIGURAÇÕES GERAIS DA PLATAFORMA
 // ==========================================
 
 // GET /admin/settings — obter configurações
@@ -498,30 +952,30 @@ adminRouter.get('/settings', authenticate, requireRole(ADMIN_ROLES), async (req:
 // PATCH /admin/settings — atualizar configurações e planos
 adminRouter.patch('/settings', authenticate, requireRole(ADMIN_ROLES), async (req: AuthenticatedRequest, res, next) => {
   try {
-    const { platformName, supportEmail, phone, maintenanceMode, footerTexts, pricingSettings } = req.body;
+    const body = req.body;
 
     const settings = await prisma.platformSettings.upsert({
       where: { id: 'default' },
       create: {
         id: 'default',
-        platformName: platformName || 'Central de Barbearias',
-        supportEmail: supportEmail || 'suporte@barberecosystem.com.br',
-        phone,
-        maintenanceMode: maintenanceMode !== undefined ? maintenanceMode : false,
-        footerTexts,
-        pricingSettings,
+        platformName: body.platformName || 'Central de Barbearias',
+        supportEmail: body.supportEmail || 'suporte@barberecosystem.com.br',
+        phone: body.phone,
+        maintenanceMode: body.maintenanceMode !== undefined ? body.maintenanceMode : false,
+        footerTexts: body.footerTexts || body,
+        pricingSettings: body.pricingSettings,
       },
       update: {
-        platformName: platformName !== undefined ? platformName : undefined,
-        supportEmail: supportEmail !== undefined ? supportEmail : undefined,
-        phone: phone !== undefined ? phone : undefined,
-        maintenanceMode: maintenanceMode !== undefined ? maintenanceMode : undefined,
-        footerTexts: footerTexts !== undefined ? footerTexts : undefined,
-        pricingSettings: pricingSettings !== undefined ? pricingSettings : undefined,
+        platformName: body.platformName !== undefined ? body.platformName : undefined,
+        supportEmail: body.supportEmail !== undefined ? body.supportEmail : undefined,
+        phone: body.phone !== undefined ? body.phone : undefined,
+        maintenanceMode: body.maintenanceMode !== undefined ? body.maintenanceMode : undefined,
+        footerTexts: body.footerTexts !== undefined ? body.footerTexts : body,
+        pricingSettings: body.pricingSettings !== undefined ? body.pricingSettings : undefined,
       },
     });
 
-    return res.json({ success: true, data: settings });
+    return res.json({ success: true, message: 'Configurações salvas com sucesso', data: settings });
   } catch (err) {
     next(err);
   }
