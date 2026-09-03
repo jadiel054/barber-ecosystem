@@ -106,6 +106,75 @@ adminRouter.get('/barbershops', authenticate, requireRole(ADMIN_ROLES), async (r
   }
 });
 
+// POST /admin/settings/reset — restaurar configurações para o padrão original
+adminRouter.post('/settings/reset', authenticate, requireRole(ADMIN_ROLES), async (req: AuthenticatedRequest, res, next) => {
+  try {
+    const defaultData = {
+      platformName: 'Central de Barbearias',
+      operatorCnpj: '00.000.000/0001-99',
+      supportEmail: 'suporte@barberecosystem.com.br',
+      phone: '(11) 99999-9999',
+      address: 'Av. Paulista, 1000 - São Paulo/SP',
+      supportHours: 'Segunda a Sexta, das 08h às 18h',
+      currency: 'BRL R$',
+      paymentMethods: ['PIX', 'CREDIT_CARD', 'BOLETO'],
+      billingDueDay: '10',
+      refundRules: 'Reembolso proporcional em até 7 dias',
+      commissionFee: '5.0',
+      minBookingNoticeMin: '30',
+      maxBookingFutureDays: '30',
+      defaultOpeningHours: '08:00 - 20:00',
+      delayToleranceMin: '15',
+      blockNationalHolidays: true,
+      allowCustomHours: true,
+      enableReminders: true,
+      reminderHoursNotice: '2',
+      autoReplyEmail: 'nao-responda@barberecosystem.com.br',
+      emailSignature: 'Atenciosamente, Equipe Barber Ecosystem',
+      enableSystemNotifications: true,
+      sessionTimeoutMin: '60',
+      maxLoginAttempts: '5',
+      requireEmailVerification: true,
+      forcePasswordChangeDays: '90',
+      primaryColor: '#f59e0b',
+      accentColor: '#d97706',
+      defaultTheme: 'DARK',
+      logoUrl: '/logo.png',
+      maintenanceMode: false,
+      maintenanceMessage: 'Estamos realizando melhorias no sistema. Voltaremos em breve!',
+      systemVersion: 'v2.4.0',
+      lastUpdateDate: new Date().toLocaleDateString('pt-BR'),
+    };
+
+    const settings = await prisma.platformSettings.upsert({
+      where: { id: 'default' },
+      create: {
+        id: 'default',
+        platformName: defaultData.platformName,
+        supportEmail: defaultData.supportEmail,
+        phone: defaultData.phone,
+        maintenanceMode: false,
+        footerTexts: defaultData,
+      },
+      update: {
+        platformName: defaultData.platformName,
+        supportEmail: defaultData.supportEmail,
+        phone: defaultData.phone,
+        maintenanceMode: false,
+        footerTexts: defaultData,
+      },
+    });
+
+    return res.json({
+      success: true,
+      message: 'Configurações restauradas com sucesso para os valores originais',
+      data: { settings, defaultValues: defaultData },
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // POST /admin/barbershops — cadastrar nova barbearia com dados completos + CNPJ
 adminRouter.post('/barbershops', authenticate, requireRole(ADMIN_ROLES), async (req: AuthenticatedRequest, res, next) => {
   try {
