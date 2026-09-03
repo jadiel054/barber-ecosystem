@@ -35,12 +35,21 @@ export default function DashboardPage() {
   const [announcements, setAnnouncements] = useState<any[]>([]);
   const [featureStatus, setFeatureStatus] = useState<Record<string, boolean>>({});
 
+  // Feedback Messages
+  const [msg, setMsg] = useState('');
+  const [errorMsg, setErrorMsg] = useState('');
+
+  // Action Loading States
+  const [appointmentActionLoadingId, setAppointmentActionLoadingId] = useState<string | null>(null);
+  const [serviceCreating, setServiceCreating] = useState(false);
+  const [serviceEditingLoading, setServiceEditingLoading] = useState(false);
+  const [serviceDeletingId, setServiceDeletingId] = useState<string | null>(null);
+
   // Service creation state
   const [newServiceName, setNewServiceName] = useState('');
   const [newServicePrice, setNewServicePrice] = useState('');
   const [newServiceDuration, setNewServiceDuration] = useState('30');
   const [newServiceDesc, setNewServiceDesc] = useState('');
-  const [msg, setMsg] = useState('');
 
   // Service editing state
   const [editingServiceId, setEditingServiceId] = useState<string | null>(null);
@@ -103,9 +112,19 @@ export default function DashboardPage() {
   const handleCreateService = async (e: React.FormEvent) => {
     e.preventDefault();
     setMsg('');
+    setErrorMsg('');
 
-    if (!user?.barbershopId) return;
+    if (!newServiceName.trim() || !newServicePrice) {
+      setErrorMsg('Preencha o nome e o preço do serviço.');
+      return;
+    }
 
+    if (!user?.barbershopId) {
+      setErrorMsg('Sua conta não possui uma barbearia vinculada.');
+      return;
+    }
+
+    setServiceCreating(true);
     const res = await apiFetch<Service>(
       '/services',
       {
@@ -121,14 +140,16 @@ export default function DashboardPage() {
       user.barbershopId
     );
 
+    setServiceCreating(false);
+
     if (res.success && res.data) {
       setServices([...services, res.data]);
       setNewServiceName('');
       setNewServicePrice('');
       setNewServiceDesc('');
-      setMsg('Serviço criado com sucesso!');
+      setMsg(`Serviço "${res.data.name}" criado com sucesso!`);
     } else {
-      setMsg(res.error || 'Erro ao criar serviço');
+      setErrorMsg(res.error || 'Erro ao criar serviço');
     }
   };
 
@@ -144,7 +165,15 @@ export default function DashboardPage() {
     e.preventDefault();
     if (!editingServiceId || !user?.barbershopId) return;
 
+    if (!editServiceName.trim() || !editServicePrice) {
+      setErrorMsg('Preencha o nome e o preço do serviço.');
+      return;
+    }
+
     setMsg('');
+    setErrorMsg('');
+    setServiceEditingLoading(true);
+
     const res = await apiFetch<Service>(
       `/services/${editingServiceId}`,
       {
@@ -160,6 +189,8 @@ export default function DashboardPage() {
       user.barbershopId
     );
 
+    setServiceEditingLoading(false);
+
     if (res.success && res.data) {
       setServices((prev) =>
         prev.map((s) => (s.id === editingServiceId ? res.data! : s))
@@ -167,15 +198,18 @@ export default function DashboardPage() {
       setEditingServiceId(null);
       setMsg('Serviço atualizado com sucesso!');
     } else {
-      setMsg(res.error || 'Erro ao atualizar serviço');
+      setErrorMsg(res.error || 'Erro ao atualizar serviço');
     }
   };
 
-  const handleDeleteService = async (id: string) => {
+  const handleDeleteService = async (id: string, name: string) => {
     if (!user?.barbershopId) return;
-    if (!confirm('Tem certeza que deseja excluir este serviço?')) return;
+    if (!confirm(`Tem certeza que deseja excluir o serviço "${name}"? Esta ação não pode ser desfeita.`)) return;
 
     setMsg('');
+    setErrorMsg('');
+    setServiceDeletingId(id);
+
     const res = await apiFetch<{ message: string }>(
       `/services/${id}`,
       {
@@ -185,15 +219,21 @@ export default function DashboardPage() {
       user.barbershopId
     );
 
+    setServiceDeletingId(null);
+
     if (res.success) {
       setServices((prev) => prev.filter((s) => s.id !== id));
-      setMsg('Serviço excluído com sucesso!');
+      setMsg(`Serviço "${name}" excluído com sucesso!`);
     } else {
-      setMsg(res.error || 'Erro ao excluir serviço');
+      setErrorMsg(res.error || 'Erro ao excluir serviço');
     }
   };
 
   const handleUpdateStatus = async (id: string, status: string) => {
+    setMsg('');
+    setErrorMsg('');
+    setAppointmentActionLoadingId(id);
+
     const res = await apiFetch<Appointment>(
       `/appointments/${id}/status`,
       {
@@ -202,15 +242,25 @@ export default function DashboardPage() {
       }
     );
 
+    setAppointmentActionLoadingId(null);
+
     if (res.success && res.data) {
       setAppointments((prev) =>
         prev.map((app) => (app.id === id ? { ...app, status } : app))
       );
+      setMsg(`Status do agendamento alterado para ${status}.`);
+    } else {
+      setErrorMsg(res.error || 'Erro ao atualizar agendamento');
     }
   };
 
   if (loading) {
-    return <div className="py-12 text-center text-slate-400">Carregando painel...</div>;
+    return (
+      <div className="py-24 text-center text-slate-400 flex flex-col items-center justify-center space-y-3">
+        <div className="w-8 h-8 border-4 border-amber-500 border-t-transparent rounded-full animate-spin"></div>
+        <p className="text-sm">Carregando painel de gestão...</p>
+      </div>
+    );
   }
 
   return (
@@ -286,8 +336,16 @@ export default function DashboardPage() {
       )}
 
       {msg && (
-        <div className="p-3 bg-amber-500/10 border border-amber-500 text-amber-400 rounded-lg text-sm">
-          {msg}
+        <div className="p-3 bg-green-500/10 border border-green-500 text-green-400 rounded-lg text-xs font-medium flex justify-between items-center">
+          <span>✅ {msg}</span>
+          <button onClick={() => setMsg('')} className="px-2 font-bold text-xs">✕</button>
+        </div>
+      )}
+
+      {errorMsg && (
+        <div className="p-3 bg-red-500/10 border border-red-500 text-red-400 rounded-lg text-xs font-medium flex justify-between items-center">
+          <span>❌ {errorMsg}</span>
+          <button onClick={() => setErrorMsg('')} className="px-2 font-bold text-xs">✕</button>
         </div>
       )}
 
@@ -339,25 +397,28 @@ export default function DashboardPage() {
                       {app.status === 'PENDING' && (
                         <>
                           <button
+                            disabled={appointmentActionLoadingId === app.id}
                             onClick={() => handleUpdateStatus(app.id, 'CONFIRMED')}
-                            className="text-xs bg-green-600 hover:bg-green-500 text-white px-2 py-1 rounded"
+                            className="text-xs bg-green-600 hover:bg-green-500 text-white px-2 py-1 rounded disabled:opacity-50"
                           >
-                            Confirmar
+                            {appointmentActionLoadingId === app.id ? 'Aguarde...' : 'Confirmar'}
                           </button>
                           <button
+                            disabled={appointmentActionLoadingId === app.id}
                             onClick={() => handleUpdateStatus(app.id, 'CANCELLED')}
-                            className="text-xs bg-red-600 hover:bg-red-500 text-white px-2 py-1 rounded"
+                            className="text-xs bg-red-600 hover:bg-red-500 text-white px-2 py-1 rounded disabled:opacity-50"
                           >
-                            Cancelar
+                            {appointmentActionLoadingId === app.id ? 'Aguarde...' : 'Cancelar'}
                           </button>
                         </>
                       )}
                       {app.status === 'CONFIRMED' && (
                         <button
+                          disabled={appointmentActionLoadingId === app.id}
                           onClick={() => handleUpdateStatus(app.id, 'COMPLETED')}
-                          className="text-xs bg-blue-600 hover:bg-blue-500 text-white px-2 py-1 rounded"
+                          className="text-xs bg-blue-600 hover:bg-blue-500 text-white px-2 py-1 rounded disabled:opacity-50"
                         >
-                          Concluir
+                          {appointmentActionLoadingId === app.id ? 'Aguarde...' : 'Concluir'}
                         </button>
                       )}
                     </div>
@@ -375,7 +436,7 @@ export default function DashboardPage() {
               <h2 className="text-lg font-bold text-white">Novo Serviço</h2>
               <form onSubmit={handleCreateService} className="space-y-3">
                 <div>
-                  <label className="block text-xs font-medium text-slate-400 mb-1">Nome do Serviço</label>
+                  <label className="block text-xs font-medium text-slate-400 mb-1">Nome do Serviço *</label>
                   <input
                     type="text"
                     value={newServiceName}
@@ -386,7 +447,7 @@ export default function DashboardPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-slate-400 mb-1">Preço (R$)</label>
+                  <label className="block text-xs font-medium text-slate-400 mb-1">Preço (R$) *</label>
                   <input
                     type="number"
                     step="0.01"
@@ -398,7 +459,7 @@ export default function DashboardPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-slate-400 mb-1">Duração (minutos)</label>
+                  <label className="block text-xs font-medium text-slate-400 mb-1">Duração (minutos) *</label>
                   <input
                     type="number"
                     value={newServiceDuration}
@@ -409,9 +470,10 @@ export default function DashboardPage() {
                 </div>
                 <button
                   type="submit"
-                  className="w-full bg-amber-600 hover:bg-[#e67700] hover:scale-[1.02] active:scale-[0.98] text-white font-medium py-2 rounded-lg text-sm transition-all duration-200"
+                  disabled={serviceCreating}
+                  className="w-full bg-amber-600 hover:bg-[#e67700] hover:scale-[1.02] active:scale-[0.98] text-white font-medium py-2 rounded-lg text-sm transition-all duration-200 disabled:opacity-50"
                 >
-                  Adicionar Serviço
+                  {serviceCreating ? 'Adicionando Serviço...' : 'Adicionar Serviço'}
                 </button>
               </form>
             </div>
@@ -469,9 +531,10 @@ export default function DashboardPage() {
                           </button>
                           <button
                             type="submit"
-                            className="bg-amber-600 hover:bg-amber-500 px-2 py-1 rounded text-white font-medium"
+                            disabled={serviceEditingLoading}
+                            className="bg-amber-600 hover:bg-amber-500 px-2 py-1 rounded text-white font-medium disabled:opacity-50"
                           >
-                            Salvar
+                            {serviceEditingLoading ? 'Salvando...' : 'Salvar'}
                           </button>
                         </div>
                       </form>
@@ -494,10 +557,11 @@ export default function DashboardPage() {
                             Editar
                           </button>
                           <button
-                            onClick={() => handleDeleteService(srv.id)}
-                            className="text-xs bg-red-900/40 hover:bg-red-800/60 text-red-300 px-2 py-1 rounded"
+                            disabled={serviceDeletingId === srv.id}
+                            onClick={() => handleDeleteService(srv.id, srv.name)}
+                            className="text-xs bg-red-900/40 hover:bg-red-800/60 text-red-300 px-2 py-1 rounded disabled:opacity-50"
                           >
-                            Excluir
+                            {serviceDeletingId === srv.id ? 'Excluindo...' : 'Excluir'}
                           </button>
                         </div>
                       </div>
