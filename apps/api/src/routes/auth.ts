@@ -1,4 +1,5 @@
 import { Router, Response } from 'express';
+import crypto from 'crypto';
 import { prisma } from '../config/prisma';
 import { hashPassword, comparePassword, generateToken } from '../utils/auth';
 import { authenticate, AuthenticatedRequest } from '../middlewares/auth';
@@ -59,6 +60,39 @@ authRouter.post('/register', async (req, res, next) => {
           barbershopId: user.barbershopId,
         },
       },
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Forgot Password / Recovery Request
+authRouter.post('/forgot-password', async (req, res, next) => {
+  try {
+    const { email } = req.body;
+
+    if (!email) {
+      return res.status(400).json({ success: false, error: 'O e-mail é obrigatório para recuperação' });
+    }
+
+    const user = await prisma.user.findUnique({ where: { email } });
+    if (!user) {
+      return res.status(404).json({ success: false, error: 'E-mail não encontrado no sistema' });
+    }
+
+    // Generate temp password
+    const tempPassword = crypto.randomBytes(4).toString('hex');
+    const hashedPassword = await hashPassword(tempPassword);
+
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { password: hashedPassword },
+    });
+
+    return res.json({
+      success: true,
+      message: `Instruções enviadas! Uma nova senha temporária foi gerada: ${tempPassword}`,
+      tempPassword,
     });
   } catch (err) {
     next(err);

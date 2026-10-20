@@ -13,11 +13,34 @@ export default function AdminPage() {
   const [actionMsg, setActionMsg] = useState('');
   const [error, setError] = useState('');
 
+  // Loading states for actions
+  const [shopSaving, setShopSaving] = useState(false);
+  const [shopStatusLoadingId, setShopStatusLoadingId] = useState<string | null>(null);
+  const [shopDeletingId, setShopDeletingId] = useState<string | null>(null);
+  const [passwordResetLoadingId, setPasswordResetLoadingId] = useState<string | null>(null);
+  const [filterLoading, setFilterLoading] = useState(false);
+
+  const [contactStatusLoadingId, setContactStatusLoadingId] = useState<string | null>(null);
+  const [replySending, setReplySending] = useState(false);
+  const [broadcastSending, setBroadcastSending] = useState(false);
+
+  const [annCreating, setAnnCreating] = useState(false);
+  const [annToggleLoadingId, setAnnToggleLoadingId] = useState<string | null>(null);
+  const [annDeletingId, setAnnDeletingId] = useState<string | null>(null);
+
+  const [userRoleLoadingId, setUserRoleLoadingId] = useState<string | null>(null);
+  const [userDeletingId, setUserDeletingId] = useState<string | null>(null);
+  const [planSaving, setPlanSaving] = useState(false);
+  const [planDeletingId, setPlanDeletingId] = useState<string | null>(null);
+  const [featureLoadingKey, setFeatureLoadingKey] = useState<string | null>(null);
+
+  const [settingsSaving, setSettingsSaving] = useState(false);
+  const [settingsResetting, setSettingsResetting] = useState(false);
+
   // 1. BARBEARIAS STATE
   const [barbershops, setBarbershops] = useState<any[]>([]);
   const [filterStatus, setFilterStatus] = useState('all');
   const [filterCity, setFilterCity] = useState('');
-  const [filterState, setFilterState] = useState('');
   const [filterPlan, setFilterPlan] = useState('');
   const [filterSearch, setFilterSearch] = useState('');
   const [selectedBarbershop, setSelectedBarbershop] = useState<any | null>(null);
@@ -176,12 +199,15 @@ export default function AdminPage() {
   // 1. BARBEARIAS FUNCTIONS
   // ==========================================
   const fetchBarbershops = async () => {
+    setFilterLoading(true);
     let query = `/admin/barbershops?status=${filterStatus}`;
     if (filterCity) query += `&city=${encodeURIComponent(filterCity)}`;
     if (filterPlan) query += `&plan=${encodeURIComponent(filterPlan)}`;
     if (filterSearch) query += `&search=${encodeURIComponent(filterSearch)}`;
 
     const res = await apiFetch<any[]>(query);
+    setFilterLoading(false);
+
     if (res.success && res.data) {
       setBarbershops(res.data);
     }
@@ -304,6 +330,12 @@ export default function AdminPage() {
     setActionMsg('');
     setError('');
 
+    if (!shopForm.name.trim() || !shopForm.slug.trim()) {
+      setError('Por favor, preencha os campos obrigatórios: Nome Fantasia e Slug URL.');
+      return;
+    }
+
+    setShopSaving(true);
     const endpoint = editingShop ? `/admin/barbershops/${editingShop.id}` : '/admin/barbershops';
     const method = editingShop ? 'PUT' : 'POST';
 
@@ -311,6 +343,8 @@ export default function AdminPage() {
       method,
       body: JSON.stringify(shopForm),
     });
+
+    setShopSaving(false);
 
     if (res.success) {
       setActionMsg(`Barbearia "${shopForm.name}" ${editingShop ? 'atualizada' : 'cadastrada'} com sucesso!`);
@@ -326,13 +360,16 @@ export default function AdminPage() {
     setError('');
     const newStatus = !barbershop.active;
 
+    setShopStatusLoadingId(barbershop.id);
     const res = await apiFetch<any>(`/admin/barbershops/${barbershop.id}/status`, {
       method: 'PATCH',
       body: JSON.stringify({ active: newStatus }),
     });
 
+    setShopStatusLoadingId(null);
+
     if (res.success) {
-      setActionMsg(`Barbearia "${barbershop.name}" ${newStatus ? 'ativada' : 'suspensa/desativada'}.`);
+      setActionMsg(`Barbearia "${barbershop.name}" ${newStatus ? 'ativada' : 'suspensa/desativada'} com sucesso.`);
       fetchBarbershops();
     } else {
       setError(res.error || 'Erro ao alterar status');
@@ -340,14 +377,17 @@ export default function AdminPage() {
   };
 
   const handleDeleteBarbershop = async (id: string, name: string) => {
-    if (!confirm(`Tem certeza que deseja excluir a barbearia "${name}" e todos os seus dados?`)) return;
+    if (!confirm(`Tem certeza que deseja excluir a barbearia "${name}"? Esta ação não pode ser desfeita.`)) return;
 
     setActionMsg('');
     setError('');
+    setShopDeletingId(id);
 
     const res = await apiFetch<any>(`/admin/barbershops/${id}`, { method: 'DELETE' });
+    setShopDeletingId(null);
+
     if (res.success) {
-      setActionMsg(`Barbearia "${name}" excluída.`);
+      setActionMsg(`Barbearia "${name}" excluída com sucesso.`);
       fetchBarbershops();
     } else {
       setError(res.error || 'Erro ao excluir barbearia');
@@ -365,9 +405,11 @@ export default function AdminPage() {
       return;
     }
 
+    setPasswordResetLoadingId(barbershop.id);
     const res = await apiFetch<{ tempPassword: string; user: any }>(`/admin/users/${owner.id}/reset-password`, {
       method: 'POST',
     });
+    setPasswordResetLoadingId(null);
 
     if (res.success && res.data) {
       setTempPasswordModal({
@@ -375,6 +417,7 @@ export default function AdminPage() {
         password: res.data.tempPassword,
         ownerName: owner.name || owner.email,
       });
+      setActionMsg(`Senha resetada para o proprietário de ${barbershop.name}`);
     } else {
       setError(res.error || 'Erro ao resetar senha');
     }
@@ -392,14 +435,21 @@ export default function AdminPage() {
   };
 
   const handleReplyContact = async (id: string) => {
-    if (!replyText) return;
+    if (!replyText.trim()) {
+      setError('Por favor, digite o texto de resposta.');
+      return;
+    }
+
     setActionMsg('');
     setError('');
+    setReplySending(true);
 
     const res = await apiFetch<any>(`/admin/contacts/${id}/reply`, {
       method: 'PATCH',
       body: JSON.stringify({ reply: replyText }),
     });
+
+    setReplySending(false);
 
     if (res.success) {
       setActionMsg('Resposta enviada com sucesso!');
@@ -413,18 +463,31 @@ export default function AdminPage() {
 
   const handleToggleContactReadStatus = async (id: string, currentStatus: string) => {
     const newStatus = currentStatus === 'READ' ? 'PENDING' : 'READ';
+    setContactStatusLoadingId(id);
+
     const res = await apiFetch<any>(`/admin/contacts/${id}/status`, {
       method: 'PATCH',
       body: JSON.stringify({ status: newStatus }),
     });
 
-    if (res.success) fetchContactsAndBroadcasts();
+    setContactStatusLoadingId(null);
+
+    if (res.success) {
+      setActionMsg('Status da mensagem atualizado com sucesso.');
+      fetchContactsAndBroadcasts();
+    }
   };
 
   const handleSendBroadcast = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!broadcastTitle.trim() || !broadcastContent.trim()) {
+      setError('Preencha o título e o conteúdo do comunicado.');
+      return;
+    }
+
     setActionMsg('');
     setError('');
+    setBroadcastSending(true);
 
     const res = await apiFetch<any>('/admin/broadcasts', {
       method: 'POST',
@@ -435,8 +498,10 @@ export default function AdminPage() {
       }),
     });
 
+    setBroadcastSending(false);
+
     if (res.success) {
-      setActionMsg('Comunicado em massa enviado!');
+      setActionMsg('Comunicado em massa enviado com sucesso!');
       setBroadcastTitle('');
       setBroadcastContent('');
       fetchContactsAndBroadcasts();
@@ -455,8 +520,14 @@ export default function AdminPage() {
 
   const handleCreateAnnouncement = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!annTitle.trim() || !annContent.trim()) {
+      setError('Preencha o título e o conteúdo do anúncio.');
+      return;
+    }
+
     setActionMsg('');
     setError('');
+    setAnnCreating(true);
 
     const res = await apiFetch<any>('/admin/announcements', {
       method: 'POST',
@@ -469,6 +540,8 @@ export default function AdminPage() {
         targetAudience: annAudience,
       }),
     });
+
+    setAnnCreating(false);
 
     if (res.success) {
       setActionMsg('Anúncio / Promoção publicado com sucesso!');
@@ -483,18 +556,33 @@ export default function AdminPage() {
   };
 
   const handleToggleAnnouncementActive = async (ann: any) => {
+    setAnnToggleLoadingId(ann.id);
     const res = await apiFetch<any>(`/admin/announcements/${ann.id}`, {
       method: 'PATCH',
       body: JSON.stringify({ active: !ann.active }),
     });
 
-    if (res.success) fetchAnnouncements();
+    setAnnToggleLoadingId(null);
+
+    if (res.success) {
+      setActionMsg(`Anúncio ${!ann.active ? 'ativado' : 'arquivado'} com sucesso.`);
+      fetchAnnouncements();
+    }
   };
 
   const handleDeleteAnnouncement = async (id: string) => {
-    if (!confirm('Deseja excluir este anúncio permanentemente?')) return;
+    if (!confirm('Tem certeza que deseja excluir este anúncio? Esta ação não pode ser desfeita.')) return;
+
+    setAnnDeletingId(id);
     const res = await apiFetch<any>(`/admin/announcements/${id}`, { method: 'DELETE' });
-    if (res.success) fetchAnnouncements();
+    setAnnDeletingId(null);
+
+    if (res.success) {
+      setActionMsg('Anúncio excluído com sucesso.');
+      fetchAnnouncements();
+    } else {
+      setError(res.error || 'Erro ao excluir anúncio');
+    }
   };
 
   // ==========================================
@@ -510,13 +598,17 @@ export default function AdminPage() {
   const handleChangeUserRole = async (id: string, newRole: string) => {
     setActionMsg('');
     setError('');
+    setUserRoleLoadingId(id);
+
     const res = await apiFetch<any>(`/admin/users/${id}/role`, {
       method: 'PATCH',
       body: JSON.stringify({ role: newRole }),
     });
 
+    setUserRoleLoadingId(null);
+
     if (res.success) {
-      setActionMsg('Perfil do usuário atualizado.');
+      setActionMsg('Perfil do usuário atualizado com sucesso.');
       fetchUsers();
     } else {
       setError(res.error || 'Erro ao atualizar perfil');
@@ -524,12 +616,17 @@ export default function AdminPage() {
   };
 
   const handleDeleteUser = async (id: string, name: string) => {
-    if (!confirm(`Deseja excluir o usuário "${name}"?`)) return;
+    if (!confirm(`Tem certeza que deseja excluir o usuário "${name}"? Esta ação não pode ser desfeita.`)) return;
+
     setActionMsg('');
     setError('');
+    setUserDeletingId(id);
+
     const res = await apiFetch<any>(`/admin/users/${id}`, { method: 'DELETE' });
+    setUserDeletingId(null);
+
     if (res.success) {
-      setActionMsg('Usuário excluído.');
+      setActionMsg('Usuário excluído com sucesso.');
       fetchUsers();
     } else {
       setError(res.error || 'Erro ao excluir usuário');
@@ -576,8 +673,14 @@ export default function AdminPage() {
 
   const handleSavePlanSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!planForm.name.trim() || !planForm.price) {
+      setError('Preencha o nome e o preço do plano.');
+      return;
+    }
+
     setActionMsg('');
     setError('');
+    setPlanSaving(true);
 
     const payload = {
       name: planForm.name,
@@ -601,6 +704,8 @@ export default function AdminPage() {
       body: JSON.stringify(payload),
     });
 
+    setPlanSaving(false);
+
     if (res.success) {
       setActionMsg(`Plano "${planForm.name}" salvo com sucesso.`);
       setShowPlanModal(false);
@@ -611,12 +716,17 @@ export default function AdminPage() {
   };
 
   const handleDeletePlan = async (id: string, name: string) => {
-    if (!confirm(`Excluir o plano "${name}"?`)) return;
+    if (!confirm(`Tem certeza que deseja excluir o plano "${name}"? Esta ação não pode ser desfeita.`)) return;
+
     setActionMsg('');
     setError('');
+    setPlanDeletingId(id);
+
     const res = await apiFetch<any>(`/admin/plans/${id}`, { method: 'DELETE' });
+    setPlanDeletingId(null);
+
     if (res.success) {
-      setActionMsg('Plano excluído.');
+      setActionMsg('Plano excluído com sucesso.');
       fetchPlans();
     } else {
       setError(res.error || 'Erro ao excluir plano');
@@ -643,11 +753,14 @@ export default function AdminPage() {
   const submitFeatureToggle = async (key: string, enabled: boolean, reason: string) => {
     setActionMsg('');
     setError('');
+    setFeatureLoadingKey(key);
 
     const res = await apiFetch<any>(`/admin/features/${key}`, {
       method: 'PATCH',
       body: JSON.stringify({ enabled, reason }),
     });
+
+    setFeatureLoadingKey(null);
 
     if (res.success) {
       setActionMsg(`Funcionalidade ${enabled ? 'ativada' : 'desativada'} com sucesso.`);
@@ -676,16 +789,43 @@ export default function AdminPage() {
     e.preventDefault();
     setActionMsg('');
     setError('');
+    setSettingsSaving(true);
 
     const res = await apiFetch<any>('/admin/settings', {
       method: 'PATCH',
       body: JSON.stringify(settings),
     });
 
+    setSettingsSaving(false);
+
     if (res.success) {
       setActionMsg('Configurações da plataforma salvas com sucesso!');
     } else {
       setError(res.error || 'Erro ao salvar configurações');
+    }
+  };
+
+  const handleResetSettings = async () => {
+    if (!confirm('Tem certeza que deseja restaurar as configurações padrão da plataforma? Todas as edições atuais de parâmetros serão redefinidas.')) {
+      return;
+    }
+
+    setActionMsg('');
+    setError('');
+    setSettingsResetting(true);
+
+    const res = await apiFetch<any>('/admin/settings/reset', { method: 'POST' });
+    setSettingsResetting(false);
+
+    if (res.success && res.data) {
+      setActionMsg('Configurações da plataforma restauradas com sucesso!');
+      if (res.data.defaultValues) {
+        setSettings(res.data.defaultValues);
+      } else {
+        fetchSettings();
+      }
+    } else {
+      setError(res.error || 'Erro ao restaurar configurações padrão');
     }
   };
 
@@ -896,9 +1036,10 @@ export default function AdminPage() {
                 />
                 <button
                   onClick={fetchBarbershops}
-                  className="bg-amber-600 hover:bg-amber-500 text-white font-medium px-4 py-1.5 rounded"
+                  disabled={filterLoading}
+                  className="bg-amber-600 hover:bg-amber-500 text-white font-medium px-4 py-1.5 rounded disabled:opacity-50"
                 >
-                  Filtrar
+                  {filterLoading ? 'Filtrando...' : 'Filtrar'}
                 </button>
               </div>
             </div>
@@ -985,26 +1126,33 @@ export default function AdminPage() {
                           Editar
                         </button>
                         <button
+                          disabled={shopStatusLoadingId === shop.id}
                           onClick={() => handleToggleBarbershopStatus(shop)}
-                          className={`px-2 py-1 rounded font-medium ${
+                          className={`px-2 py-1 rounded font-medium disabled:opacity-50 ${
                             shop.active !== false
                               ? 'bg-red-950/60 hover:bg-red-900 text-red-300'
                               : 'bg-green-950/60 hover:bg-green-900 text-green-300'
                           }`}
                         >
-                          {shop.active !== false ? 'Suspender' : 'Reativar'}
+                          {shopStatusLoadingId === shop.id
+                            ? 'Processando...'
+                            : shop.active !== false
+                            ? 'Suspender'
+                            : 'Reativar'}
                         </button>
                         <button
+                          disabled={passwordResetLoadingId === shop.id}
                           onClick={() => handleResetOwnerPassword(shop)}
-                          className="bg-slate-800 hover:bg-slate-700 text-amber-400 px-2 py-1 rounded"
+                          className="bg-slate-800 hover:bg-slate-700 text-amber-400 px-2 py-1 rounded disabled:opacity-50"
                         >
-                          Resetar Senha
+                          {passwordResetLoadingId === shop.id ? 'Gerando...' : 'Resetar Senha'}
                         </button>
                         <button
+                          disabled={shopDeletingId === shop.id}
                           onClick={() => handleDeleteBarbershop(shop.id, shop.name)}
-                          className="bg-red-800 hover:bg-red-700 text-white px-2 py-1 rounded"
+                          className="bg-red-800 hover:bg-red-700 text-white px-2 py-1 rounded disabled:opacity-50"
                         >
-                          Excluir
+                          {shopDeletingId === shop.id ? 'Excluindo...' : 'Excluir'}
                         </button>
                       </td>
                     </tr>
@@ -1227,9 +1375,16 @@ export default function AdminPage() {
                 </button>
                 <button
                   type="submit"
-                  className="bg-amber-600 hover:bg-amber-500 text-white font-semibold px-5 py-2 rounded text-xs"
+                  disabled={shopSaving}
+                  className="bg-amber-600 hover:bg-amber-500 text-white font-semibold px-5 py-2 rounded text-xs disabled:opacity-50"
                 >
-                  {editingShop ? 'Salvar Alterações' : 'Cadastrar Barbearia'}
+                  {shopSaving
+                    ? editingShop
+                      ? 'Salvando...'
+                      : 'Cadastrando...'
+                    : editingShop
+                    ? 'Salvar Alterações'
+                    : 'Cadastrar Barbearia'}
                 </button>
               </div>
             </form>
@@ -1319,11 +1474,12 @@ export default function AdminPage() {
                           {msg.status === 'REPLIED' ? 'Respondida' : msg.status === 'READ' ? 'Lida' : 'Pendente'}
                         </span>
                         <button
+                          disabled={contactStatusLoadingId === msg.id}
                           onClick={() => handleToggleContactReadStatus(msg.id, msg.status)}
-                          className="text-slate-400 hover:text-white px-1"
+                          className="text-slate-400 hover:text-white px-1 disabled:opacity-50"
                           title="Alternar Lida/Pendente"
                         >
-                          👁️
+                          {contactStatusLoadingId === msg.id ? '⏳' : '👁️'}
                         </button>
                       </div>
                     </div>
@@ -1356,10 +1512,11 @@ export default function AdminPage() {
                                 Cancelar
                               </button>
                               <button
+                                disabled={replySending}
                                 onClick={() => handleReplyContact(msg.id)}
-                                className="bg-amber-600 hover:bg-amber-500 px-3 py-1 rounded text-white font-semibold"
+                                className="bg-amber-600 hover:bg-amber-500 px-3 py-1 rounded text-white font-semibold disabled:opacity-50"
                               >
-                                Enviar Resposta
+                                {replySending ? 'Enviando...' : 'Enviar Resposta'}
                               </button>
                             </div>
                           </div>
@@ -1427,9 +1584,10 @@ export default function AdminPage() {
 
                 <button
                   type="submit"
-                  className="w-full bg-amber-600 hover:bg-amber-500 text-white font-semibold py-2 rounded transition"
+                  disabled={broadcastSending}
+                  className="w-full bg-amber-600 hover:bg-amber-500 text-white font-semibold py-2 rounded transition disabled:opacity-50"
                 >
-                  Enviar Comunicado Agora
+                  {broadcastSending ? 'Enviando comunicado...' : 'Enviar Comunicado Agora'}
                 </button>
               </form>
             </div>
@@ -1541,9 +1699,10 @@ export default function AdminPage() {
 
               <button
                 type="submit"
-                className="w-full bg-amber-600 hover:bg-amber-500 text-white font-semibold py-2 rounded transition"
+                disabled={annCreating}
+                className="w-full bg-amber-600 hover:bg-amber-500 text-white font-semibold py-2 rounded transition disabled:opacity-50"
               >
-                Publicar Anúncio
+                {annCreating ? 'Publicando...' : 'Publicar Anúncio'}
               </button>
             </form>
           </div>
@@ -1610,18 +1769,20 @@ export default function AdminPage() {
 
                     <div className="flex gap-2">
                       <button
+                        disabled={annToggleLoadingId === ann.id}
                         onClick={() => handleToggleAnnouncementActive(ann)}
-                        className={`px-2.5 py-1 rounded text-xs font-semibold ${
+                        className={`px-2.5 py-1 rounded text-xs font-semibold disabled:opacity-50 ${
                           ann.active ? 'bg-green-950/80 text-green-400' : 'bg-red-950/80 text-red-400'
                         }`}
                       >
-                        {ann.active ? 'Ativo' : 'Arquivado'}
+                        {annToggleLoadingId === ann.id ? 'Alterando...' : ann.active ? 'Ativo' : 'Arquivado'}
                       </button>
                       <button
+                        disabled={annDeletingId === ann.id}
                         onClick={() => handleDeleteAnnouncement(ann.id)}
-                        className="bg-red-900/40 hover:bg-red-800 text-red-300 px-2 py-1 rounded text-xs"
+                        className="bg-red-900/40 hover:bg-red-800 text-red-300 px-2 py-1 rounded text-xs disabled:opacity-50"
                       >
-                        Excluir
+                        {annDeletingId === ann.id ? 'Excluindo...' : 'Excluir'}
                       </button>
                     </div>
                   </div>
@@ -1724,9 +1885,10 @@ export default function AdminPage() {
                         <td className="px-5 py-3">{u.barbershop?.name || '—'}</td>
                         <td className="px-5 py-3">
                           <select
+                            disabled={userRoleLoadingId === u.id}
                             value={u.role}
                             onChange={(e) => handleChangeUserRole(u.id, e.target.value)}
-                            className="bg-slate-800 border border-slate-700 rounded px-2 py-1 text-amber-300 font-semibold text-[11px]"
+                            className="bg-slate-800 border border-slate-700 rounded px-2 py-1 text-amber-300 font-semibold text-[11px] disabled:opacity-50"
                           >
                             <option value="SUPER_ADMIN">SUPER_ADMIN</option>
                             <option value="ADMIN">ADMIN (Dono)</option>
@@ -1736,10 +1898,11 @@ export default function AdminPage() {
                         </td>
                         <td className="px-5 py-3 text-right space-x-1.5">
                           <button
+                            disabled={userDeletingId === u.id}
                             onClick={() => handleDeleteUser(u.id, u.name)}
-                            className="bg-red-800 hover:bg-red-700 text-white px-2 py-1 rounded"
+                            className="bg-red-800 hover:bg-red-700 text-white px-2 py-1 rounded disabled:opacity-50"
                           >
-                            Excluir
+                            {userDeletingId === u.id ? 'Excluindo...' : 'Excluir'}
                           </button>
                         </td>
                       </tr>
@@ -1799,10 +1962,11 @@ export default function AdminPage() {
                             Editar
                           </button>
                           <button
+                            disabled={planDeletingId === p.id}
                             onClick={() => handleDeletePlan(p.id, p.name)}
-                            className="bg-red-900/50 text-red-300 hover:bg-red-800 px-2.5 py-1 rounded"
+                            className="bg-red-900/50 text-red-300 hover:bg-red-800 px-2.5 py-1 rounded disabled:opacity-50"
                           >
-                            Excluir
+                            {planDeletingId === p.id ? 'Excluindo...' : 'Excluir'}
                           </button>
                         </div>
                       </div>
@@ -1827,14 +1991,19 @@ export default function AdminPage() {
                       </div>
 
                       <button
+                        disabled={featureLoadingKey === feat.key}
                         onClick={() => handleToggleFeature(feat.key, feat.enabled, feat.name)}
-                        className={`px-4 py-2 rounded-lg font-bold text-xs transition ${
+                        className={`px-4 py-2 rounded-lg font-bold text-xs transition disabled:opacity-50 ${
                           feat.enabled
                             ? 'bg-green-600 hover:bg-green-500 text-white'
                             : 'bg-red-900/60 hover:bg-red-800 text-red-300'
                         }`}
                       >
-                        {feat.enabled ? '🟢 ATIVADO' : '🔴 DESATIVADO'}
+                        {featureLoadingKey === feat.key
+                          ? 'Alterando...'
+                          : feat.enabled
+                          ? '🟢 ATIVADO'
+                          : '🔴 DESATIVADO'}
                       </button>
                     </div>
                   ))}
@@ -1976,9 +2145,10 @@ export default function AdminPage() {
                 </button>
                 <button
                   type="submit"
-                  className="bg-amber-600 hover:bg-amber-500 text-white font-semibold px-4 py-1.5 rounded"
+                  disabled={planSaving}
+                  className="bg-amber-600 hover:bg-amber-500 text-white font-semibold px-4 py-1.5 rounded disabled:opacity-50"
                 >
-                  Salvar
+                  {planSaving ? 'Salvando...' : 'Salvar'}
                 </button>
               </div>
             </form>
@@ -2419,12 +2589,22 @@ export default function AdminPage() {
                 </div>
               )}
 
-              <div className="pt-4 border-t border-slate-800">
+              <div className="pt-4 border-t border-slate-800 flex flex-wrap justify-between items-center gap-3">
                 <button
                   type="submit"
-                  className="bg-amber-600 hover:bg-amber-500 text-white font-semibold px-6 py-2 rounded-lg transition"
+                  disabled={settingsSaving || settingsResetting}
+                  className="bg-amber-600 hover:bg-amber-500 text-white font-semibold px-6 py-2 rounded-lg transition disabled:opacity-50"
                 >
-                  Salvar Configurações
+                  {settingsSaving ? 'Salvando Configurações...' : 'Salvar Configurações'}
+                </button>
+
+                <button
+                  type="button"
+                  disabled={settingsSaving || settingsResetting}
+                  onClick={handleResetSettings}
+                  className="bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold px-4 py-2 rounded-lg transition border border-slate-700 text-xs disabled:opacity-50"
+                >
+                  {settingsResetting ? 'Restaurando Padrões...' : '🔄 Restaurar Padrões'}
                 </button>
               </div>
             </form>
